@@ -75,7 +75,7 @@ struct Node<T> {
 
 #[derive(Debug)]
 struct LinkedList<T> {
-    head: Option<Node<T>>,
+    head: Option<Box<Node<T>>>,
 }
 
 impl<T> LinkedList<T> {
@@ -83,32 +83,34 @@ impl<T> LinkedList<T> {
         LinkedList { head: None }
     }
     fn push_back(&mut self, to_add: T) {
-        match &mut self.head {
-            Some(elem) => {
-                let mut last_node = &mut elem.next;
-                loop {
-                    match last_node {
-                        Some(box_pointer) => last_node = &mut box_pointer.next,
-                        None => {
-                            *last_node = Some(Box::new(Node {
-                                elem: to_add,
-                                next: None,
-                            }));
-                            break;
-                        }
-                    }
+        let mut current_end = &mut self.head;
+        while let Some(node) = current_end {
+            current_end = &mut node.next;
+        }
+        *current_end = Some(Box::new(Node {
+            elem: to_add,
+            next: None,
+        }));
+    }
+    fn pop_back(&mut self) -> Option<T> {
+        if self.head.is_none() {
+            return None;
+        }
+        if self.head.as_ref().is_some_and(|x| x.next.is_none()) {
+            let res = self.head.take();
+            return Some(res.unwrap().elem);
+        }
+        let mut current_end = &mut self.head;
+        while let Some(node) = current_end {
+            if let Some(ref mut next_node) = node.next {
+                if next_node.next.is_none() {
+                    return node.next.take().map(|n| n.elem);
                 }
             }
-            None => {
-                self.head = Some(Node {
-                    elem: to_add,
-                    next: None,
-                })
-            }
+
+            current_end = &mut node.next;
         }
-    }
-    fn pop_back() {
-        todo!();
+        return None;
     }
     fn peek() {
         todo!();
@@ -123,6 +125,9 @@ fn main() {
     println!("{:?}", my_linked_list);
     my_linked_list.push_back(20);
     println!("{:?}", my_linked_list);
+    let popped_elem = my_linked_list.pop_back();
+    println!("{:?}", my_linked_list);
+    println!("{:?}", popped_elem);
 }
 
 #[cfg(test)]
