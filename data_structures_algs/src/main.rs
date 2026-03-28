@@ -1,5 +1,3 @@
-fn main() {}
-
 // Stack - first in first out
 // push -> takes element and add it on top to the stack
 // pop -> takes back the last element
@@ -68,6 +66,63 @@ impl<T> Stack<T> {
     fn is_empty(&self) -> bool {
         self.size() == 0
     }
+}
+#[derive(Debug)]
+struct Node<T> {
+    elem: T,
+    next: Option<Box<Node<T>>>,
+}
+
+#[derive(Debug)]
+struct LinkedList<T> {
+    head: Option<Node<T>>,
+}
+
+impl<T> LinkedList<T> {
+    fn new() -> Self {
+        LinkedList { head: None }
+    }
+    fn push_back(&mut self, to_add: T) {
+        match &mut self.head {
+            Some(elem) => {
+                let mut last_node = &mut elem.next;
+                loop {
+                    match last_node {
+                        Some(box_pointer) => last_node = &mut box_pointer.next,
+                        None => {
+                            *last_node = Some(Box::new(Node {
+                                elem: to_add,
+                                next: None,
+                            }));
+                            break;
+                        }
+                    }
+                }
+            }
+            None => {
+                self.head = Some(Node {
+                    elem: to_add,
+                    next: None,
+                })
+            }
+        }
+    }
+    fn pop_back() {
+        todo!();
+    }
+    fn peek() {
+        todo!();
+    }
+}
+
+fn main() {
+    let mut my_linked_list = LinkedList::<i32>::new();
+    my_linked_list.push_back(10);
+    println!("{:?}", my_linked_list);
+    my_linked_list.push_back(15);
+    println!("{:?}", my_linked_list);
+    my_linked_list.push_back(20);
+    println!("{:?}", my_linked_list);
 }
 
 #[cfg(test)]
