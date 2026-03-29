@@ -67,13 +67,13 @@ impl<T> Stack<T> {
         self.size() == 0
     }
 }
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct Node<T> {
     elem: T,
     next: Option<Box<Node<T>>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct LinkedList<T> {
     head: Option<Box<Node<T>>>,
 }
@@ -93,9 +93,6 @@ impl<T> LinkedList<T> {
         }));
     }
     fn pop_back(&mut self) -> Option<T> {
-        if self.head.is_none() {
-            return None;
-        }
         if self.head.as_ref().is_some_and(|x| x.next.is_none()) {
             let res = self.head.take();
             return Some(res.unwrap().elem);
@@ -112,22 +109,65 @@ impl<T> LinkedList<T> {
         }
         return None;
     }
-    fn peek() {
-        todo!();
+    fn push_front(&mut self, to_add: T) {
+        if self.head.is_none() {
+            self.head = Some(Box::new(Node {
+                elem: to_add,
+                next: None,
+            }))
+        } else {
+            let new_node = Some(Box::new(Node {
+                elem: to_add,
+                next: self.head.take(),
+            }));
+            self.head = new_node;
+        }
+    }
+    fn pop_front(&mut self) -> Option<T> {
+        if self.head.is_none() {
+            None
+        } else {
+            let first_node = self.head.take();
+            if let Some(node) = first_node {
+                self.head = node.next;
+                return Some(node.elem);
+            } else {
+                self.head = None;
+                return None;
+            }
+        }
+    }
+    fn peek_front(&self) -> Option<&T> {
+        if let Some(node) = &self.head {
+            Some(&node.elem)
+        } else {
+            None
+        }
+    }
+    fn peek_back(&self) -> Option<&T> {
+        let mut current_end = &self.head;
+        while let Some(node) = current_end {
+            if node.next.is_none() {
+                return Some(&node.elem);
+            }
+            current_end = &node.next;
+        }
+        None
     }
 }
 
 fn main() {
     let mut my_linked_list = LinkedList::<i32>::new();
-    my_linked_list.push_back(10);
+    my_linked_list.push_front(10);
     println!("{:?}", my_linked_list);
-    my_linked_list.push_back(15);
+    my_linked_list.push_front(0);
     println!("{:?}", my_linked_list);
-    my_linked_list.push_back(20);
+    let peek_front = my_linked_list.peek_front();
+    println!("Peeked front: {:?}", peek_front);
     println!("{:?}", my_linked_list);
-    let popped_elem = my_linked_list.pop_back();
+    let popped_val = my_linked_list.pop_front();
+    println!("{:?}", popped_val);
     println!("{:?}", my_linked_list);
-    println!("{:?}", popped_elem);
 }
 
 #[cfg(test)]
@@ -172,5 +212,80 @@ mod tests {
         assert_eq!(queue.dequeue(), Some(5));
         assert_eq!(queue.dequeue(), Some(6));
         assert_eq!(queue.dequeue(), None);
+    }
+    #[test]
+    fn test_pop_front() {
+        let mut list = LinkedList::<i32>::new();
+        assert_eq!(list.pop_front(), None);
+
+        list.push_front(3);
+        list.push_front(2);
+        list.push_front(1);
+        // lista: 1 -> 2 -> 3
+
+        assert_eq!(list.pop_front(), Some(1));
+        assert_eq!(list.pop_front(), Some(2));
+        assert_eq!(list.pop_front(), Some(3));
+        assert_eq!(list.pop_front(), None);
+    }
+
+    #[test]
+    fn test_peek_front() {
+        let mut list = LinkedList::<i32>::new();
+        assert_eq!(list.peek_front(), None);
+
+        list.push_front(3);
+        list.push_front(2);
+        list.push_front(1);
+        // lista: 1 -> 2 -> 3
+
+        assert_eq!(list.peek_front(), Some(&1));
+        list.pop_front();
+        assert_eq!(list.peek_front(), Some(&2));
+    }
+
+    #[test]
+    fn test_peek_back() {
+        let mut list = LinkedList::<i32>::new();
+        assert_eq!(list.peek_back(), None);
+
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+        // lista: 1 -> 2 -> 3
+
+        assert_eq!(list.peek_back(), Some(&3));
+        list.pop_back();
+        assert_eq!(list.peek_back(), Some(&2));
+    }
+
+    #[test]
+    fn linked_list_front_test() {
+        let mut my_linked_list = LinkedList::<i32>::new();
+        my_linked_list.push_back(10);
+        assert_eq!(my_linked_list.head.as_ref().unwrap().elem, 10);
+        my_linked_list.push_back(-10);
+        assert_eq!(
+            my_linked_list,
+            LinkedList {
+                head: Some(Box::new(Node {
+                    elem: 10,
+                    next: Some(Box::new(Node {
+                        elem: -10,
+                        next: None
+                    }))
+                }))
+            }
+        );
+        assert_eq!(my_linked_list.pop_back(), Some(-10));
+        assert_eq!(
+            my_linked_list,
+            LinkedList {
+                head: Some(Box::new(Node {
+                    elem: 10,
+                    next: None
+                }))
+            }
+        );
     }
 }
