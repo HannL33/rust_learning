@@ -15,59 +15,39 @@ impl<T: Ord> BinarySearchTree<T> {
     }
 
     fn insert(&mut self, val: T) {
-        match &mut self.root {
-            Some(root_val) => {
-                let mut next_node: &mut Option<Box<Node<T>>>;
-                if (val < root_val.value) && root_val.left.is_some() {
-                    next_node = &mut root_val.left;
-                } else if (val >= root_val.value) && root_val.right.is_some() {
-                    next_node = &mut root_val.right;
-                } else if val < root_val.value {
-                    root_val.left = Some(Box::new(Node {
+        // The idea is to iterate over to the end of the tree to insert the value
+        let mut next_node = &mut self.root;
+        while let Some(node) = next_node {
+            if val >= node.value {
+                if node.right.is_none() {
+                    node.right = Some(Box::new(Node {
                         value: val,
                         left: None,
                         right: None,
                     }));
                     return;
                 } else {
-                    root_val.right = Some(Box::new(Node {
+                    next_node = &mut node.right;
+                }
+            } else {
+                if node.left.is_none() {
+                    node.left = Some(Box::new(Node {
                         value: val,
                         left: None,
                         right: None,
                     }));
                     return;
+                } else {
+                    next_node = &mut node.left;
                 }
-                while let Some(node) = next_node {
-                    if (val < node.value) && node.left.is_some() {
-                        next_node = &mut node.left;
-                    } else if (val >= node.value) && node.right.is_some() {
-                        next_node = &mut node.right;
-                    } else {
-                        if val < node.value {
-                            node.left = Some(Box::new(Node {
-                                value: val,
-                                left: None,
-                                right: None,
-                            }));
-                        } else {
-                            node.right = Some(Box::new(Node {
-                                value: val,
-                                left: None,
-                                right: None,
-                            }));
-                        }
-                        break;
-                    }
-                }
-            }
-            None => {
-                self.root = Some(Box::new(Node {
-                    value: val,
-                    left: None,
-                    right: None,
-                }))
             }
         }
+        // If next_node is None in the first while loop (i.e. there is no elements)
+        self.root = Some(Box::new(Node {
+            value: val,
+            left: None,
+            right: None,
+        }));
     }
 }
 #[cfg(test)]
