@@ -38,7 +38,7 @@ impl<T> LinkedList<T> {
 
             current_end = &mut node.next;
         }
-        return None;
+        None
     }
     pub fn push_front(&mut self, to_add: T) {
         if self.head.is_none() {

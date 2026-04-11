@@ -13,14 +13,14 @@ pub struct Dictionary<K, V> {
 impl<K: Hash + Eq, V> Dictionary<K, V> {
     pub fn new() -> Self {
         Dictionary {
-            buckets: (0..16).map(|x| Vec::new()).collect(),
+            buckets: (0..16).map(|_| Vec::new()).collect(),
             len: 16,
             count: 0,
         }
     }
     pub fn insert(&mut self, key: K, value: V) {
         if self.count as f64 > 0.75 * (self.len as f64) {
-            self._resize();
+            self.resize();
         }
 
         let index: usize = self.hash(&key);
@@ -55,12 +55,12 @@ impl<K: Hash + Eq, V> Dictionary<K, V> {
         let index: usize = self.hash(&key);
         self.buckets[index].iter().any(|x| x.0 == *key)
     }
-    pub fn _resize(&mut self) {
+    fn resize(&mut self) {
         let new_len: usize = self.len * 2;
         self.len = new_len; // I do not now if this is safe... But to use hash, i need it
         // as it is condensed into the method, perhaps hash should be free function...
 
-        let mut new_buckets: Vec<Vec<(K, V)>> = (0..new_len).map(|x| Vec::new()).collect();
+        let mut new_buckets: Vec<Vec<(K, V)>> = (0..new_len).map(|_| Vec::new()).collect();
         let old_bucks = take(&mut self.buckets);
         for vector in old_bucks.into_iter() {
             for tuple in vector.into_iter() {
