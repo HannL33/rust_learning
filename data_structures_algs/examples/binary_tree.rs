@@ -85,22 +85,66 @@ impl<T: Ord> BinarySearchTree<T> {
         }
         return None;
     }
-    fn inorder(&self)
+    fn inorder(&self) -> Vec<T>
+    // sorted sequence
     where
-        T: std::fmt::Debug,
+        T: std::fmt::Debug + Clone,
     {
-        // sorted sequence
-        Self::print_inorder_node(&self.root);
+        let mut res_vec: Vec<T> = Vec::new();
+        Self::inorder_node_rec(&self.root, &mut res_vec);
+        res_vec
     }
-    fn print_inorder_node(node: &Option<Box<Node<T>>>)
+    fn inorder_node_rec(node: &Option<Box<Node<T>>>, vec_to_add: &mut Vec<T>)
     where
-        T: std::fmt::Debug,
+        T: std::fmt::Debug + Clone,
     {
         if let Some(node_unpacked) = node {
-            Self::print_inorder_node(&node_unpacked.left);
-            println!("{:?}", node_unpacked.value);
-            Self::print_inorder_node(&node_unpacked.right);
+            Self::inorder_node_rec(&node_unpacked.left, vec_to_add);
+            vec_to_add.push(node_unpacked.value.clone());
+            Self::inorder_node_rec(&node_unpacked.right, vec_to_add);
         }
+    }
+
+    fn preorder(&self) -> Vec<T>
+    where
+        T: std::fmt::Debug + Clone,
+    {
+        let mut res_vec: Vec<T> = Vec::new();
+        Self::preorder_node_rec(&self.root, &mut res_vec);
+        res_vec
+    }
+    fn preorder_node_rec(node: &Option<Box<Node<T>>>, vec_to_add: &mut Vec<T>)
+    where
+        T: std::fmt::Debug + Clone,
+    {
+        if let Some(node_unpacked) = node {
+            vec_to_add.push(node_unpacked.value.clone());
+            Self::preorder_node_rec(&node_unpacked.left, vec_to_add);
+            Self::preorder_node_rec(&node_unpacked.right, vec_to_add);
+        }
+    }
+
+    fn postorder(&self) -> Vec<T>
+    where
+        T: std::fmt::Debug + Clone,
+    {
+        let mut res_vec: Vec<T> = Vec::new();
+        Self::postorder_node_rec(&self.root, &mut res_vec);
+        res_vec
+    }
+    fn postorder_node_rec(node: &Option<Box<Node<T>>>, vec_to_add: &mut Vec<T>)
+    where
+        T: std::fmt::Debug + Clone,
+    {
+        if let Some(node_unpacked) = node {
+            Self::postorder_node_rec(&node_unpacked.left, vec_to_add);
+            Self::postorder_node_rec(&node_unpacked.right, vec_to_add);
+            vec_to_add.push(node_unpacked.value.clone());
+        }
+    }
+
+    fn delete(&mut self, val: &T) -> Option<T> {
+        todo!();
     }
 }
 
@@ -122,7 +166,8 @@ fn main() {
     bts.insert(-6);
     println!("Min: {:?}", bts.min());
     println!("Max: {:?}", bts.max());
-    bts.inorder();
+    println!("Inorder: {:?}", bts.inorder());
+    println!("Preorder: {:?}", bts.preorder());
 }
 
 #[cfg(test)]
@@ -175,6 +220,39 @@ mod tests {
             bst.insert(val);
         }
         assert_eq!(bst.max(), Some(&25));
+    }
+
+    #[test]
+    fn test_inorder() {
+        let mut bst: BinarySearchTree<i32> = BinarySearchTree::new();
+        assert_eq!(bst.inorder(), vec![]);
+
+        for val in [5, 3, 7, 1, 4, 6, 8] {
+            bst.insert(val);
+        }
+        assert_eq!(bst.inorder(), vec![1, 3, 4, 5, 6, 7, 8]);
+    }
+
+    #[test]
+    fn test_postorder() {
+        let mut bst: BinarySearchTree<i32> = BinarySearchTree::new();
+        assert_eq!(bst.postorder(), vec![]);
+
+        for val in [5, 3, 7, 1, 4, 6, 8] {
+            bst.insert(val);
+        }
+        assert_eq!(bst.postorder(), vec![1, 4, 3, 6, 8, 7, 5]);
+    }
+
+    #[test]
+    fn test_preorder() {
+        let mut bst: BinarySearchTree<i32> = BinarySearchTree::new();
+        assert_eq!(bst.preorder(), vec![]);
+
+        for val in [5, 3, 7, 1, 4, 6, 8] {
+            bst.insert(val);
+        }
+        assert_eq!(bst.preorder(), vec![5, 3, 1, 4, 7, 6, 8]);
     }
 
     #[test]
