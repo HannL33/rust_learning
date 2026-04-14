@@ -1,5 +1,5 @@
 #[derive(Debug)]
-struct BinarySearchTree<T> {
+pub struct BinarySearchTree<T> {
     root: Option<Box<Node<T>>>,
 }
 #[derive(Debug)]
@@ -13,11 +13,11 @@ impl<T: Ord> BinarySearchTree<T> {
     // We accept duplicate values and we are moving them into the right place.
     // This is concious.
     // Delete will delete only one occurence.
-    fn new() -> Self {
+    pub fn new() -> Self {
         BinarySearchTree { root: None }
     }
 
-    fn insert(&mut self, val: T) {
+    pub fn insert(&mut self, val: T) {
         // The idea is to iterate over to the end of the tree to insert the value
         // This is iterative approach
         let mut next_node = &mut self.root;
@@ -53,7 +53,7 @@ impl<T: Ord> BinarySearchTree<T> {
             right: None,
         }));
     }
-    fn contains(&self, val: &T) -> bool {
+    pub fn contains(&self, val: &T) -> bool {
         let mut next_node = &self.root;
         while let Some(node) = next_node {
             if *val > node.value {
@@ -66,7 +66,7 @@ impl<T: Ord> BinarySearchTree<T> {
         }
         return false;
     }
-    fn min(&self) -> Option<&T> {
+    pub fn min(&self) -> Option<&T> {
         let mut next_node = &self.root;
         while let Some(node) = next_node {
             if node.left.is_none() {
@@ -77,7 +77,7 @@ impl<T: Ord> BinarySearchTree<T> {
         }
         return None;
     }
-    fn max(&self) -> Option<&T> {
+    pub fn max(&self) -> Option<&T> {
         let mut next_node = &self.root;
         while let Some(node) = next_node {
             if node.right.is_none() {
@@ -88,7 +88,7 @@ impl<T: Ord> BinarySearchTree<T> {
         }
         return None;
     }
-    fn inorder(&self) -> Vec<T>
+    pub fn inorder(&self) -> Vec<T>
     // sorted sequence
     where
         T: Clone,
@@ -108,7 +108,7 @@ impl<T: Ord> BinarySearchTree<T> {
         }
     }
 
-    fn preorder(&self) -> Vec<T>
+    pub fn preorder(&self) -> Vec<T>
     where
         T: Clone,
     {
@@ -127,7 +127,7 @@ impl<T: Ord> BinarySearchTree<T> {
         }
     }
 
-    fn postorder(&self) -> Vec<T>
+    pub fn postorder(&self) -> Vec<T>
     where
         T: Clone,
     {
@@ -157,7 +157,7 @@ impl<T: Ord> BinarySearchTree<T> {
         return None;
     }
 
-    fn delete(&mut self, val: &T) -> bool
+    pub fn delete(&mut self, val: &T) -> bool
     where
         T: Clone,
     {
@@ -203,28 +203,6 @@ impl<T: Ord> BinarySearchTree<T> {
         }
     }
 }
-fn main() {
-    let mut bts = BinarySearchTree::new();
-    println!("Min: {:?}", bts.min());
-    println!("Max: {:?}", bts.max());
-
-    bts.insert(5);
-    bts.insert(10);
-    bts.insert(0);
-    println!("Binary Tree Search: {:?}", bts);
-    println!("Does contain? {} : {}", -1, bts.contains(&-1));
-    bts.insert(-5);
-    println!("Min: {:?}", bts.min());
-    bts.insert(0);
-    bts.insert(101);
-    println!("Min: {:?}", bts.min());
-    bts.insert(-6);
-    println!("Min: {:?}", bts.min());
-    println!("Max: {:?}", bts.max());
-    println!("Inorder: {:?}", bts.inorder());
-    println!("Preorder: {:?}", bts.preorder());
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
