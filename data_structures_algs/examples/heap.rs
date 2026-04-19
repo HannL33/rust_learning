@@ -2,7 +2,7 @@
 struct MaxHeap<T> {
     data: Vec<T>,
 }
-impl<T: PartialOrd> MaxHeap<T> {
+impl<T: Ord> MaxHeap<T> {
     /// Parent: (i - 1) / 2
     /// Left Child: 2 * i + 1
     /// Right Child: 2 * i + 2
@@ -29,13 +29,13 @@ impl<T: PartialOrd> MaxHeap<T> {
         self.data.swap(0, last);
         let res = self.data.pop();
         if !self.data.is_empty() {
-            self.sift_down(0);
+            self.sift_down(0, 0);
         }
         res
     }
-    fn sift_down(&mut self, start_level: usize) {
+    fn sift_down(&mut self, start_level: usize, excluded_count: usize) {
         let mut elem_idx: usize = start_level;
-        let data_len: usize = self.data.len();
+        let data_len: usize = self.data.len() - excluded_count;
 
         loop {
             if 2 * elem_idx + 1 < data_len {
@@ -64,24 +64,29 @@ impl<T: PartialOrd> MaxHeap<T> {
         }
         let idx_start_from = res.data.len() / 2 - 1;
         for idx in (0..=idx_start_from).rev() {
-            res.sift_down(idx);
+            res.sift_down(idx, 0);
         }
         res
     }
 }
+fn heapsort<T: Ord>(data: Vec<T>) -> Vec<T> {
+    // in-place heapsort (but little worse version, as not doing it on mut ref)
+    let mut temp_heap = MaxHeap::heapify(data);
+    if temp_heap.data.is_empty() {
+        return temp_heap.data;
+    }
+    let last_idx = temp_heap.data.len() - 1;
+    for i in 1..=last_idx {
+        temp_heap.data.swap(0, last_idx - i + 1);
+        temp_heap.sift_down(0, i);
+    }
+    temp_heap.data
+}
 
 fn main() {
-    let mut my_heap = MaxHeap::new();
-    my_heap.insert(5);
-    my_heap.insert(10);
-    my_heap.insert(0);
-    my_heap.insert(6);
-    my_heap.insert(-1);
-    my_heap.insert(3);
-    println!("{:?}", my_heap);
-
-    my_heap.extract_max();
-    println!("{:?}", my_heap);
+    let vec = vec![0, -1, 9, 4, 8, 2, 100, 15, -3, 3, 5];
+    let vec_sorted = heapsort(vec);
+    println!("{:?}", vec_sorted);
 }
 
 #[cfg(test)]
@@ -149,6 +154,24 @@ mod tests {
             result.push(val);
         }
         assert_eq!(result, vec![15, 9, 8, 4, 3, 2, 1]);
+    }
+
+    #[test]
+    fn test_heapsort_n10() {
+        let input = vec![3, 10, 1, 7, 5, 8, 2, 9, 4, 6];
+        let mut expected = input.clone();
+        expected.sort();
+        assert_eq!(heapsort(input), expected);
+    }
+
+    #[test]
+    fn test_heapsort_n20() {
+        let input = vec![
+            15, 3, 18, 7, 11, 1, 20, 9, 4, 14, 6, 17, 2, 13, 8, 19, 5, 12, 10, 16,
+        ];
+        let mut expected = input.clone();
+        expected.sort();
+        assert_eq!(heapsort(input), expected);
     }
 
     #[test]
