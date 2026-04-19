@@ -29,12 +29,12 @@ impl<T: PartialOrd> MaxHeap<T> {
         self.data.swap(0, last);
         let res = self.data.pop();
         if !self.data.is_empty() {
-            self.sift_down();
+            self.sift_down(0);
         }
-        return res;
+        res
     }
-    fn sift_down(&mut self) {
-        let mut elem_idx: usize = 0;
+    fn sift_down(&mut self, start_level: usize) {
+        let mut elem_idx: usize = start_level;
         let data_len: usize = self.data.len();
 
         loop {
@@ -57,10 +57,18 @@ impl<T: PartialOrd> MaxHeap<T> {
             }
         }
     }
+    fn heapify(data_vec: Vec<T>) -> Self {
+        let mut res = MaxHeap { data: data_vec };
+        if res.data.len() <= 1 {
+            return res;
+        }
+        let idx_start_from = res.data.len() / 2 - 1;
+        for idx in (0..=idx_start_from).rev() {
+            res.sift_down(idx);
+        }
+        res
+    }
 }
-// 0, 6, 3, 5, -1
-// 6, 0, 3, 5, -1
-// 6,
 
 fn main() {
     let mut my_heap = MaxHeap::new();
@@ -123,6 +131,24 @@ mod tests {
         heap.insert(42);
         assert_eq!(heap.extract_max(), Some(42));
         assert_eq!(heap.extract_max(), None);
+    }
+
+    #[test]
+    fn test_heapify_maintains_heap_property() {
+        let heap = MaxHeap::heapify(vec![3, 10, 1, 7, 5, 8, 2]);
+        for i in 1..heap.data.len() {
+            assert!(heap.data[(i - 1) / 2] >= heap.data[i]);
+        }
+    }
+
+    #[test]
+    fn test_heapify_extracts_in_sorted_order() {
+        let mut heap = MaxHeap::heapify(vec![4, 8, 2, 15, 1, 9, 3]);
+        let mut result = vec![];
+        while let Some(val) = heap.extract_max() {
+            result.push(val);
+        }
+        assert_eq!(result, vec![15, 9, 8, 4, 3, 2, 1]);
     }
 
     #[test]
