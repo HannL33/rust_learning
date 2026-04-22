@@ -1,15 +1,15 @@
 #[derive(Debug)]
-struct MaxHeap<T> {
+pub struct MaxHeap<T> {
     data: Vec<T>,
 }
 impl<T: Ord> MaxHeap<T> {
     /// Parent: (i - 1) / 2
     /// Left Child: 2 * i + 1
     /// Right Child: 2 * i + 2
-    fn new() -> Self {
+    pub fn new() -> Self {
         MaxHeap { data: Vec::new() }
     }
-    fn insert(&mut self, val: T) {
+    pub fn insert(&mut self, val: T) {
         self.data.push(val);
         self.sift_up();
     }
@@ -20,7 +20,7 @@ impl<T: Ord> MaxHeap<T> {
             elem_idx = (elem_idx - 1) / 2;
         }
     }
-    fn extract_max(&mut self) -> Option<T> {
+    pub fn extract_max(&mut self) -> Option<T> {
         if self.data.is_empty() {
             return None;
         }
@@ -57,7 +57,7 @@ impl<T: Ord> MaxHeap<T> {
             }
         }
     }
-    fn heapify(data_vec: Vec<T>) -> Self {
+    pub fn heapify(data_vec: Vec<T>) -> Self {
         let mut res = MaxHeap { data: data_vec };
         if res.data.len() <= 1 {
             return res;
@@ -70,7 +70,7 @@ impl<T: Ord> MaxHeap<T> {
         res
     }
 }
-fn heapsort<T: Ord>(data: Vec<T>) -> Vec<T> {
+pub fn heapsort<T: Ord>(data: Vec<T>) -> Vec<T> {
     // in-place heapsort (but little worse version, as not doing it on mut ref)
     let mut temp_heap = MaxHeap::heapify(data);
     if temp_heap.data.is_empty() {
@@ -83,7 +83,6 @@ fn heapsort<T: Ord>(data: Vec<T>) -> Vec<T> {
     }
     temp_heap.data
 }
-fn main() {}
 
 #[cfg(test)]
 mod tests {
