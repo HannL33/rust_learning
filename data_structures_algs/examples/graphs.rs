@@ -7,26 +7,37 @@ struct Graph {
 
 impl Graph {
     fn new(directed: bool) -> Self {
-        todo!();
+        Self {
+            adj: HashMap::new(),
+            directed: directed,
+        }
     }
 
     fn add_node(&mut self, id: usize) {
-        todo!();
+        self.adj.entry(id).or_insert(Vec::new());
     }
     fn add_edge(&mut self, from: usize, to: usize, weight: u32) {
-        todo!()
+        self.adj.entry(from).or_default().push((to, weight));
+        if !self.directed {
+            self.adj.entry(to).or_default().push((from, weight));
+        }
     }
-    fn neighbors(&self, node: usize) -> &[(usize, u32)] {
-        todo!();
+    fn neighbors(&self, node: usize) -> Option<&[(usize, u32)]> {
+        self.adj.get(&node).map(Vec::as_slice) // maps vec into slice inside option type
     }
     fn has_edge(&self, from: usize, to: usize) -> bool {
-        todo!();
+        match self.adj.get(&from) {
+            Some(vec) => vec.iter().any(|v| v.0 == to),
+            None => false,
+        }
     }
     fn node_count(&self) -> usize {
-        todo!();
+        self.adj.len()
     }
     fn edge_count(&self) -> usize {
-        todo!();
+        let _count: usize = self.adj.values().map(|v| v.len()).sum();
+        // if is not directed we need not count duplicates, so divide 2
+        if self.directed { _count } else { _count / 2 }
     }
 }
 impl Graph {
