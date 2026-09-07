@@ -3,42 +3,43 @@ use std::{
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
 };
 
-struct Graph {
+#[derive(Debug)]
+pub struct Graph {
     adj: HashMap<usize, Vec<(usize, u32)>>, // (neighbour, weight)
     directed: bool,
 }
 
 impl Graph {
-    fn new(directed: bool) -> Self {
+    pub fn new(directed: bool) -> Self {
         Self {
             adj: HashMap::new(),
             directed,
         }
     }
 
-    fn add_node(&mut self, id: usize) {
+    pub fn add_node(&mut self, id: usize) {
         self.adj.entry(id).or_default();
     }
-    fn add_edge(&mut self, from: usize, to: usize, weight: u32) {
+    pub fn add_edge(&mut self, from: usize, to: usize, weight: u32) {
         self.adj.entry(from).or_default().push((to, weight));
         if !self.directed {
             self.adj.entry(to).or_default().push((from, weight));
         }
         self.adj.entry(to).or_default();
     }
-    fn neighbors(&self, node: usize) -> Option<&[(usize, u32)]> {
+    pub fn neighbors(&self, node: usize) -> Option<&[(usize, u32)]> {
         self.adj.get(&node).map(Vec::as_slice) // maps vec into slice inside option type
     }
-    fn has_edge(&self, from: usize, to: usize) -> bool {
+    pub fn has_edge(&self, from: usize, to: usize) -> bool {
         match self.adj.get(&from) {
             Some(vec) => vec.iter().any(|&(neighbor, _)| neighbor == to),
             None => false,
         }
     }
-    fn node_count(&self) -> usize {
+    pub fn node_count(&self) -> usize {
         self.adj.len()
     }
-    fn edge_count(&self) -> usize {
+    pub fn edge_count(&self) -> usize {
         let count: usize = self.adj.values().map(|v| v.len()).sum();
         // if is not directed we need not count duplicates, so divide 2
         if self.directed { count } else { count / 2 }
@@ -48,7 +49,7 @@ impl Graph {
     // ALGS
     //
     // BFS
-    fn bfs(&self, start: usize) -> Vec<usize> {
+    pub fn bfs(&self, start: usize) -> Vec<usize> {
         let mut waiting: VecDeque<usize> = VecDeque::new();
         let mut visited: HashSet<usize> = HashSet::new();
         let mut result = Vec::new();
@@ -70,7 +71,7 @@ impl Graph {
         result
     }
 
-    fn shortest_path_unweighted(&self, start: usize, end: usize) -> Option<Vec<usize>> {
+    pub fn shortest_path_unweighted(&self, start: usize, end: usize) -> Option<Vec<usize>> {
         if start == end {
             return Some(vec![start]);
         }
@@ -105,7 +106,7 @@ impl Graph {
 
         None
     }
-    fn is_connected(&self) -> bool {
+    pub fn is_connected(&self) -> bool {
         // KNOWN LIMITATION: for directed graphs this only checks reachability
         // from one arbitrary node following outgoing edges, not true weak
         // connectivity (which would need to treat edges as undirected).
@@ -124,7 +125,7 @@ impl Graph {
     }
 
     // DFS
-    fn dfs_iterative(&self, start: usize) -> Vec<usize> {
+    pub fn dfs_iterative(&self, start: usize) -> Vec<usize> {
         let mut stack: Vec<usize> = vec![start];
         let mut visited = HashSet::new();
         let mut result: Vec<usize> = Vec::new();
@@ -163,7 +164,7 @@ impl Graph {
         }
     }
 
-    fn dfs_recursive(&self, start: usize) -> Vec<usize> {
+    pub fn dfs_recursive(&self, start: usize) -> Vec<usize> {
         let mut result: Vec<usize> = Vec::new();
         let mut visited: HashSet<usize> = HashSet::new();
 
@@ -223,7 +224,7 @@ impl Graph {
 
         false
     }
-    fn has_cycle(&self) -> bool {
+    pub fn has_cycle(&self) -> bool {
         let mut visited: HashSet<usize> = HashSet::new();
 
         // non directed
@@ -279,7 +280,7 @@ impl Graph {
         false
     }
 
-    fn topological_sort(&self) -> Option<Vec<usize>> {
+    pub fn topological_sort(&self) -> Option<Vec<usize>> {
         let mut visited = HashSet::new();
         let mut in_progress = HashSet::new();
         let mut result = Vec::new();
@@ -296,7 +297,7 @@ impl Graph {
     }
 
     // Dijkstra
-    fn dijkstra(&self, start: usize) -> HashMap<usize, u32> {
+    pub fn dijkstra(&self, start: usize) -> HashMap<usize, u32> {
         let mut dist: HashMap<usize, u32> = HashMap::from([(start, 0)]);
         let mut pqueue = BinaryHeap::new();
         let mut visited: HashSet<usize> = HashSet::new();
@@ -329,7 +330,7 @@ impl Graph {
     }
     // NOTE: the  loop below duplicates `dijkstra` above on purpose.
     // kept separate for educational reasons - each algorithm stays readable
-    fn shortest_path_weighted(&self, start: usize, end: usize) -> Option<(u32, Vec<usize>)> {
+    pub fn shortest_path_weighted(&self, start: usize, end: usize) -> Option<(u32, Vec<usize>)> {
         let mut dist: HashMap<usize, u32> = HashMap::from([(start, 0)]);
         let mut pqueue = BinaryHeap::new();
         let mut visited: HashSet<usize> = HashSet::new();
@@ -377,26 +378,6 @@ impl Graph {
         }
         None
     }
-}
-fn main() {
-    let mut test_graph = Graph::new(true);
-
-    test_graph.add_edge(0, 1, 4);
-    test_graph.add_edge(0, 2, 2);
-    test_graph.add_edge(0, 7, 20);
-    test_graph.add_edge(1, 3, 5);
-    test_graph.add_edge(2, 1, 1);
-    test_graph.add_edge(2, 3, 8);
-    test_graph.add_edge(2, 4, 10);
-    test_graph.add_edge(3, 5, 2);
-    test_graph.add_edge(4, 5, 3);
-    test_graph.add_edge(4, 6, 1);
-    test_graph.add_edge(5, 6, 1);
-    test_graph.add_edge(6, 7, 2);
-    test_graph.add_edge(6, 4, 2);
-    test_graph.add_edge(7, 9, 5);
-
-    println!("Dijkstra: {:?}", test_graph.dijkstra(5));
 }
 
 #[cfg(test)]
