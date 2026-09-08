@@ -64,7 +64,7 @@ impl<T: Ord> BinarySearchTree<T> {
                 return true;
             }
         }
-        return false;
+        false
     }
     pub fn min(&self) -> Option<&T> {
         let mut next_node = &self.root;
@@ -75,7 +75,7 @@ impl<T: Ord> BinarySearchTree<T> {
                 next_node = &node.left;
             }
         }
-        return None;
+        None
     }
     pub fn max(&self) -> Option<&T> {
         let mut next_node = &self.root;
@@ -86,7 +86,7 @@ impl<T: Ord> BinarySearchTree<T> {
                 next_node = &node.right;
             }
         }
-        return None;
+        None
     }
     pub fn inorder(&self) -> Vec<T>
     // sorted sequence
@@ -154,7 +154,7 @@ impl<T: Ord> BinarySearchTree<T> {
                 current_node = &node_unpacked.left;
             }
         }
-        return None;
+        None
     }
 
     pub fn delete(&mut self, val: &T) -> bool
@@ -166,7 +166,7 @@ impl<T: Ord> BinarySearchTree<T> {
         }
         self.root = Self::delete_node_rec(self.root.take(), val);
 
-        return true;
+        true
     }
     fn delete_node_rec(node: Option<Box<Node<T>>>, val: &T) -> Option<Box<Node<T>>>
     where
@@ -176,29 +176,29 @@ impl<T: Ord> BinarySearchTree<T> {
             Some(mut unpacked_node) => {
                 if unpacked_node.value > *val {
                     unpacked_node.left = Self::delete_node_rec(unpacked_node.left, val);
-                    return Some(unpacked_node);
+                    Some(unpacked_node)
                 } else if unpacked_node.value < *val {
                     unpacked_node.right = Self::delete_node_rec(unpacked_node.right, val);
-                    return Some(unpacked_node);
+                    Some(unpacked_node)
                 } else {
                     // we found the val
                     if unpacked_node.left.is_none() && unpacked_node.right.is_none() {
-                        return None;
+                        None
                     } else if unpacked_node.left.is_some() && unpacked_node.right.is_some() {
                         // both right and left are some
                         let min_val = Self::min_node(&unpacked_node.right).unwrap().clone();
                         unpacked_node.right = Self::delete_node_rec(unpacked_node.right, &min_val);
                         unpacked_node.value = min_val;
-                        return Some(unpacked_node);
+                        Some(unpacked_node)
                     } else if unpacked_node.left.is_some() {
-                        return unpacked_node.left;
+                        unpacked_node.left
                     } else {
-                        return unpacked_node.right;
+                        unpacked_node.right
                     }
                 }
             }
             None => {
-                return None;
+                None
             }
         }
     }
@@ -294,9 +294,9 @@ mod tests {
         bst.insert(10);
         bst.insert(0);
         bst.insert(-1);
-        assert_eq!(bst.contains(&10), true);
-        assert_eq!(bst.contains(&-1), true);
-        assert_eq!(bst.contains(&-11), false);
+        assert!(bst.contains(&10));
+        assert!(bst.contains(&-1));
+        assert!(!bst.contains(&-11));
     }
 
     #[test]
@@ -310,8 +310,8 @@ mod tests {
         for val in [5, 3, 7] {
             bst.insert(val);
         }
-        assert_eq!(bst.delete(&3), true);
-        assert_eq!(bst.contains(&3), false);
+        assert!(bst.delete(&3));
+        assert!(!bst.contains(&3));
         assert_eq!(bst.inorder(), vec![5, 7]);
     }
 
@@ -328,9 +328,9 @@ mod tests {
         for val in [5, 3, 7, 1] {
             bst.insert(val);
         }
-        assert_eq!(bst.delete(&3), true);
-        assert_eq!(bst.contains(&3), false);
-        assert_eq!(bst.contains(&1), true);
+        assert!(bst.delete(&3));
+        assert!(!bst.contains(&3));
+        assert!(bst.contains(&1));
         assert_eq!(bst.inorder(), vec![1, 5, 7]);
     }
 
@@ -347,10 +347,10 @@ mod tests {
         for val in [5, 3, 7, 1, 4] {
             bst.insert(val);
         }
-        assert_eq!(bst.delete(&3), true);
-        assert_eq!(bst.contains(&3), false);
-        assert_eq!(bst.contains(&1), true);
-        assert_eq!(bst.contains(&4), true);
+        assert!(bst.delete(&3));
+        assert!(!bst.contains(&3));
+        assert!(bst.contains(&1));
+        assert!(bst.contains(&4));
         assert_eq!(bst.inorder(), vec![1, 4, 5, 7]);
     }
 }

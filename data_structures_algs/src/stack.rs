@@ -15,7 +15,7 @@ impl<T> Stack<T> {
         self.data.len()
     }
 
-    pub fn push(&mut self, elem: T) -> () {
+    pub fn push(&mut self, elem: T) {
         self.data.push(elem);
     }
 
@@ -39,10 +39,10 @@ pub struct Queue<T> {
 
 impl<T> Queue<T> {
     pub fn new() -> Self {
-        return Queue {
+        Queue {
             stack_in: Stack::new(),
             stack_out: Stack::new(),
-        };
+        }
     }
     pub fn enqueue(&mut self, elem: T) {
         self.stack_in.push(elem);
@@ -85,11 +85,11 @@ mod tests {
     fn test_size() {
         let stack = Stack::from(vec![1, 2, 3]);
         assert_eq!(stack.size(), 3);
-        assert_eq!(stack.is_empty(), false);
+        assert!(!stack.is_empty());
 
         let stack: Stack<i32> = Stack::new();
         assert_eq!(stack.size(), 0);
-        assert_eq!(stack.is_empty(), true);
+        assert!(stack.is_empty());
     }
 
     #[test]

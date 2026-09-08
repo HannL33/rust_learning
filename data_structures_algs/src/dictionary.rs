@@ -52,7 +52,7 @@ impl<K: Hash + Eq, V> Dictionary<K, V> {
         }
     }
     pub fn contains_key(&self, key: &K) -> bool {
-        let index: usize = self.hash(&key);
+        let index: usize = self.hash(key);
         self.buckets[index].iter().any(|x| x.0 == *key)
     }
     fn resize(&mut self) {

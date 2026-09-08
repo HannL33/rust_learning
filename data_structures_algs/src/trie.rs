@@ -47,7 +47,7 @@ impl Trie {
                 return false;
             }
         }
-        if current_tree.is_end { true } else { false }
+        current_tree.is_end
     }
     pub fn starts_with(&self, word: &str) -> bool {
         let mut current_tree = &self.next;
@@ -58,7 +58,7 @@ impl Trie {
                 return false;
             }
         }
-        return true;
+        true
     }
     pub fn delete(&mut self, word: &str) {
         if self.search(word) {
@@ -86,7 +86,7 @@ impl Trie {
                 return true;
             }
         } else {
-            return false;
+            false
         }
     }
 }

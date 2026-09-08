@@ -116,11 +116,10 @@ impl Graph {
         // strong connectivity. currently untested.
 
         // take whatever node
-        if let Some(node) = self.adj.keys().next() {
-            if self.bfs(*node).len() == self.node_count() {
+        if let Some(node) = self.adj.keys().next()
+            && self.bfs(*node).len() == self.node_count() {
                 return true;
             }
-        }
         false
     }
 
@@ -139,7 +138,7 @@ impl Graph {
 
             if let Some(neis) = self.neighbors(node) {
                 for (nei, _) in neis {
-                    if !visited.contains(&nei) {
+                    if !visited.contains(nei) {
                         stack.push(*nei);
                     }
                 }
@@ -157,7 +156,7 @@ impl Graph {
         result.push(start);
         if let Some(neis) = self.neighbors(start) {
             for (nei, _) in neis {
-                if !visited.contains(&nei) {
+                if !visited.contains(nei) {
                     self._dfs_recursive_helper(*nei, visited, result);
                 }
             }
@@ -183,7 +182,7 @@ impl Graph {
 
         if let Some(neis) = self.neighbors(node) {
             for (nei, _) in neis {
-                if !visited.contains(&nei) {
+                if !visited.contains(nei) {
                     if self._cycle_helper_undirected(*nei, Some(node), visited) {
                         return true;
                     }
@@ -207,14 +206,13 @@ impl Graph {
 
         if let Some(neis) = self.neighbors(node) {
             for (nei, _) in neis {
-                if in_progress.contains(&nei) {
+                if in_progress.contains(nei) {
                     return true;
                 }
-                if !visited.contains(&nei) {
-                    if self._cycle_helper_directed(*nei, in_progress, visited) {
+                if !visited.contains(nei)
+                    && self._cycle_helper_directed(*nei, in_progress, visited) {
                         return true;
                     }
-                }
             }
         }
 
@@ -230,25 +228,23 @@ impl Graph {
         // non directed
         if !self.directed {
             for node in self.adj.keys() {
-                if !visited.contains(node) {
-                    if self._cycle_helper_undirected(*node, None, &mut visited) {
+                if !visited.contains(node)
+                    && self._cycle_helper_undirected(*node, None, &mut visited) {
                         return true;
                     }
-                }
             }
-            return false;
+            false
         }
         //directed
         else {
             let mut in_progress = HashSet::new();
             for node in self.adj.keys() {
-                if !visited.contains(node) {
-                    if self._cycle_helper_directed(*node, &mut in_progress, &mut visited) {
+                if !visited.contains(node)
+                    && self._cycle_helper_directed(*node, &mut in_progress, &mut visited) {
                         return true;
                     }
-                }
             }
-            return false;
+            false
         }
     }
 
@@ -266,11 +262,10 @@ impl Graph {
                 if in_progress.contains(&nei) {
                     return true;
                 }
-                if !visited.contains(&nei) {
-                    if self.top_sort_helper_dfs(nei, in_progress, visited, result) {
+                if !visited.contains(&nei)
+                    && self.top_sort_helper_dfs(nei, in_progress, visited, result) {
                         return true;
                     }
-                }
             }
         }
         in_progress.remove(&node);
@@ -285,11 +280,10 @@ impl Graph {
         let mut in_progress = HashSet::new();
         let mut result = Vec::new();
         for &node in self.adj.keys() {
-            if !visited.contains(&node) {
-                if self.top_sort_helper_dfs(node, &mut in_progress, &mut visited, &mut result) {
+            if !visited.contains(&node)
+                && self.top_sort_helper_dfs(node, &mut in_progress, &mut visited, &mut result) {
                     return None;
                 }
-            }
         }
 
         result.reverse();
@@ -526,7 +520,7 @@ mod tests {
         for (from, to) in edges {
             graph.add_edge(from, to, 1);
         }
-        assert_eq!(graph.has_cycle(), false);
+        assert!(!graph.has_cycle());
     }
     #[test]
     fn test_no_cycle_in_undirected_tree() {
@@ -535,7 +529,7 @@ mod tests {
         for (from, to) in edges {
             graph.add_edge(from, to, 1);
         }
-        assert_eq!(graph.has_cycle(), false);
+        assert!(!graph.has_cycle());
     }
     #[test]
     fn test_cycle_in_undirected_triangle() {
@@ -544,7 +538,7 @@ mod tests {
         for (from, to) in edges {
             graph.add_edge(from, to, 1);
         }
-        assert_eq!(graph.has_cycle(), true);
+        assert!(graph.has_cycle());
     }
     #[test]
     fn test_cycle_in_undirected_graph_with_tail() {
@@ -562,7 +556,7 @@ mod tests {
         for (from, to) in edges {
             graph.add_edge(from, to, 1);
         }
-        assert_eq!(graph.has_cycle(), true);
+        assert!(graph.has_cycle());
     }
 
     #[test]
@@ -572,7 +566,7 @@ mod tests {
         for (from, to) in edges {
             graph.add_edge(from, to, 1);
         }
-        assert_eq!(graph.has_cycle(), false);
+        assert!(!graph.has_cycle());
     }
 
     #[test]
@@ -582,7 +576,7 @@ mod tests {
         for (from, to) in edges {
             graph.add_edge(from, to, 1);
         }
-        assert_eq!(graph.has_cycle(), false);
+        assert!(!graph.has_cycle());
     }
 
     #[test]
@@ -592,7 +586,7 @@ mod tests {
         for (from, to) in edges {
             graph.add_edge(from, to, 1);
         }
-        assert_eq!(graph.has_cycle(), true);
+        assert!(graph.has_cycle());
     }
 
     #[test]
@@ -602,7 +596,7 @@ mod tests {
         for (from, to) in edges {
             graph.add_edge(from, to, 1);
         }
-        assert_eq!(graph.has_cycle(), true);
+        assert!(graph.has_cycle());
     }
 
     #[test]

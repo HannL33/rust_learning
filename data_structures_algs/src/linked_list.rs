@@ -30,11 +30,10 @@ impl<T> LinkedList<T> {
         }
         let mut current_end = &mut self.head;
         while let Some(node) = current_end {
-            if let Some(ref mut next_node) = node.next {
-                if next_node.next.is_none() {
+            if let Some(ref mut next_node) = node.next
+                && next_node.next.is_none() {
                     return node.next.take().map(|n| n.elem);
                 }
-            }
 
             current_end = &mut node.next;
         }
@@ -61,10 +60,10 @@ impl<T> LinkedList<T> {
             let first_node = self.head.take();
             if let Some(node) = first_node {
                 self.head = node.next;
-                return Some(node.elem);
+                Some(node.elem)
             } else {
                 self.head = None;
-                return None;
+                None
             }
         }
     }
