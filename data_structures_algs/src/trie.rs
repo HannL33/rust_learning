@@ -6,12 +6,12 @@ struct TrieNode {
     is_end: bool,
 }
 #[derive(Debug)]
-struct Trie {
+pub struct Trie {
     next: TrieNode,
 }
 
 impl Trie {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Trie {
             next: TrieNode {
                 next: HashMap::new(),
@@ -19,7 +19,7 @@ impl Trie {
             },
         }
     }
-    fn insert(&mut self, word: &str) {
+    pub fn insert(&mut self, word: &str) {
         let mut current_tree = &mut self.next;
         for c in word.chars() {
             if !current_tree.next.contains_key(&c) {
@@ -38,7 +38,7 @@ impl Trie {
         current_tree.is_end = true;
     }
 
-    fn search(&self, word: &str) -> bool {
+    pub fn search(&self, word: &str) -> bool {
         let mut current_tree = &self.next;
         for c in word.chars() {
             if current_tree.next.contains_key(&c) {
@@ -49,7 +49,7 @@ impl Trie {
         }
         if current_tree.is_end { true } else { false }
     }
-    fn starts_with(&self, word: &str) -> bool {
+    pub fn starts_with(&self, word: &str) -> bool {
         let mut current_tree = &self.next;
         for c in word.chars() {
             if current_tree.next.contains_key(&c) {
@@ -60,7 +60,7 @@ impl Trie {
         }
         return true;
     }
-    fn delete(&mut self, word: &str) {
+    pub fn delete(&mut self, word: &str) {
         if self.search(word) {
             Self::delete_rec(&mut self.next, word);
         }
@@ -89,15 +89,6 @@ impl Trie {
             return false;
         }
     }
-    fn dfs() {
-        todo!();
-    }
-}
-fn main() {
-    let chars = "ąęćóńżź";
-    println!("Chars: {}", chars);
-    let first_char = &chars.chars().next().unwrap();
-    println!("Chars - 1: {}", &chars[first_char.len_utf8()..]);
 }
 
 #[cfg(test)]
