@@ -1,4 +1,38 @@
-use data_structures_algs::graphs::{self, Graph};
+use data_structures_algs::graphs::Graph;
+use regex::Regex;
+use std::fs;
+
+#[derive(Debug)]
+struct Line {
+    x1: usize,
+    y1: usize,
+    x2: usize,
+    y2: usize,
+}
+#[derive(Debug)]
+struct Maze {
+    lines: Vec<Line>,
+    cell_size: usize,
+    n_maze: usize,
+}
+impl Maze {
+    fn new(lines: Vec<Line>) -> Maze {
+        let mut maze = Maze {
+            lines: lines,
+            cell_size: 0,
+            n_maze: 0,
+        };
+        // better would be to check for minimum |x2-x1| + |y2-y1|
+        // TODO
+        let mut unique_x1: Vec<usize> =
+            maze.lines.iter().filter_map(|line| Some(line.x1)).collect();
+        unique_x1.sort();
+        unique_x1.dedup();
+        maze.cell_size = unique_x1[1] - unique_x1[0];
+        maze.n_maze = (unique_x1[unique_x1.len() - 1] - unique_x1[0]) / maze.cell_size;
+        maze
+    }
+}
 
 #[derive(Debug)]
 struct SquareGrid {
@@ -207,4 +241,24 @@ fn main() {
     let shortest_path = test_graph.shortest_path_unweighted(5, 96);
     temp_square.add_shortest_path(&shortest_path);
     temp_square.print();
+
+    // encoding the svg
+    let contents =
+        fs::read_to_string("data/10x10_maze.svg").expect("Problem with reading the file!");
+
+    //println!("Content of the string: {:?}", contents);
+    let mut extracted_lines: Vec<Line> = Vec::new();
+    let re = Regex::new(r#"x1=\"(\d+)\"\sy1=\"(\d+)\"\sx2=\"(\d+)\"\sy2=\"(\d+)\""#)
+        .expect("Something wrong with regex");
+    for (_, [x1, y1, x2, y2]) in re.captures_iter(&contents).map(|c| c.extract()) {
+        extracted_lines.push(Line {
+            x1: x1.parse().unwrap(),
+            y1: y1.parse().unwrap(),
+            x2: x2.parse().unwrap(),
+            y2: y2.parse().unwrap(),
+        });
+    }
+    println!("Extracted lines: {:?}", extracted_lines);
+    let mut maze = Maze::new(extracted_lines);
+    println!("Maze: {:?}", maze);
 }
