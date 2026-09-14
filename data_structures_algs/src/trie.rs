@@ -1,3 +1,5 @@
+//! Prefix tree over `char`, with insert, search, prefix lookup and pruning delete.
+
 use std::collections::HashMap;
 
 #[derive(Debug)]
@@ -60,6 +62,10 @@ impl Trie {
         }
         true
     }
+    /// Removes a word, pruning nodes that become unused.
+    ///
+    /// Nodes shared with another word, or that still mark the end of a shorter word,
+    /// are kept — so deleting `"car"` from a trie holding `"card"` leaves `"card"` intact.
     pub fn delete(&mut self, word: &str) {
         if self.search(word) {
             Self::delete_rec(&mut self.next, word);
@@ -68,11 +74,7 @@ impl Trie {
     fn delete_rec(node: &mut TrieNode, chars: &str) -> bool {
         if chars.is_empty() {
             node.is_end = false;
-            if node.next.len() >= 1 {
-                return false;
-            } else {
-                return true;
-            }
+            return node.next.is_empty();
         }
         let first_char = &chars.chars().next().unwrap();
         if Self::delete_rec(
@@ -80,11 +82,7 @@ impl Trie {
             &chars[first_char.len_utf8()..],
         ) {
             node.next.remove(first_char);
-            if node.next.len() >= 1 || node.is_end {
-                return false;
-            } else {
-                return true;
-            }
+            node.next.is_empty() && !node.is_end
         } else {
             false
         }

@@ -1,3 +1,6 @@
+> **Note (EN):** this is my personal, day-by-day Rust study plan, written in Polish.
+> The code in this repository follows it. See the [README](README.md) for an English overview.
+
 # Plan nauki Rust — od algorytmów do serwera HTTP
 
 **Profil:** matematyk, junior developer, Python/FastAPI/GenAI background  

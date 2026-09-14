@@ -1,9 +1,12 @@
+//! Singly-linked list built on `Box`, with push/pop/peek at both ends.
+
 #[derive(Debug, PartialEq)]
 pub struct Node<T> {
     elem: T,
     next: Option<Box<Node<T>>>,
 }
 
+/// Singly-linked list owning its nodes through `Box`.
 #[derive(Debug, PartialEq)]
 pub struct LinkedList<T> {
     head: Option<Box<Node<T>>>,
@@ -13,6 +16,7 @@ impl<T> LinkedList<T> {
     pub fn new() -> Self {
         LinkedList { head: None }
     }
+    /// Appends an element to the end of the list. O(n).
     pub fn push_back(&mut self, to_add: T) {
         let mut current_end = &mut self.head;
         while let Some(node) = current_end {
@@ -31,9 +35,10 @@ impl<T> LinkedList<T> {
         let mut current_end = &mut self.head;
         while let Some(node) = current_end {
             if let Some(ref mut next_node) = node.next
-                && next_node.next.is_none() {
-                    return node.next.take().map(|n| n.elem);
-                }
+                && next_node.next.is_none()
+            {
+                return node.next.take().map(|n| n.elem);
+            }
 
             current_end = &mut node.next;
         }

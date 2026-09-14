@@ -1,8 +1,16 @@
+//! Hash map written from scratch: separate chaining, doubling resize at 0.75 load factor.
+
 use std::hash::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::mem::take;
 
+/// Hash map using separate chaining for collisions.
+///
+/// Each bucket is a `Vec` of key/value pairs, so a collision just appends to the
+/// bucket. Once the number of entries passes 0.75 × bucket count the table doubles
+/// and every entry is rehashed. Lookups are O(1) on average, O(n) worst case if
+/// everything hashes into one bucket.
 #[derive(Debug)]
 pub struct Dictionary<K, V> {
     buckets: Vec<Vec<(K, V)>>,
@@ -11,6 +19,7 @@ pub struct Dictionary<K, V> {
 }
 
 impl<K: Hash + Eq, V> Dictionary<K, V> {
+    /// Creates an empty map with 16 buckets.
     pub fn new() -> Self {
         Dictionary {
             buckets: (0..16).map(|_| Vec::new()).collect(),
@@ -71,6 +80,7 @@ impl<K: Hash + Eq, V> Dictionary<K, V> {
         }
         self.buckets = new_buckets;
     }
+    /// Maps a key to a bucket index using `DefaultHasher` modulo the bucket count.
     pub fn hash(&self, key: &K) -> usize {
         let mut hasher = DefaultHasher::new();
         key.hash(&mut hasher);

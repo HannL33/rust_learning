@@ -1,3 +1,4 @@
+//! LIFO stack backed by a `Vec`, and a FIFO queue built from two stacks.
 pub struct Stack<T> {
     data: Vec<T>,
 }
@@ -10,6 +11,7 @@ impl<T> Stack<T> {
         Stack { data: vec }
     }
 
+    /// Number of elements currently on the stack.
     // formally on my mac usize is u64, but it is recommended (i think so), to keep usize
     pub fn size(&self) -> usize {
         self.data.len()

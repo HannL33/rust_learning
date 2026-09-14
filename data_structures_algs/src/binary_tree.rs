@@ -1,3 +1,9 @@
+//! Binary search tree with the three classic traversals and node deletion.
+
+/// Unbalanced binary search tree.
+///
+/// Operations are O(log n) on balanced input but degrade to O(n) if
+/// values are inserted in sorted order, since there is no rebalancing.
 #[derive(Debug)]
 pub struct BinarySearchTree<T> {
     root: Option<Box<Node<T>>>,
@@ -53,6 +59,7 @@ impl<T: Ord> BinarySearchTree<T> {
             right: None,
         }));
     }
+    /// Returns `true` if the value is present in the tree.
     pub fn contains(&self, val: &T) -> bool {
         let mut next_node = &self.root;
         while let Some(node) = next_node {
@@ -66,6 +73,7 @@ impl<T: Ord> BinarySearchTree<T> {
         }
         false
     }
+    /// Returns the smallest value (leftmost node), or `None` if the tree is empty.
     pub fn min(&self) -> Option<&T> {
         let mut next_node = &self.root;
         while let Some(node) = next_node {
@@ -77,6 +85,7 @@ impl<T: Ord> BinarySearchTree<T> {
         }
         None
     }
+    /// Returns the largest value (rightmost node), or `None` if the tree is empty.
     pub fn max(&self) -> Option<&T> {
         let mut next_node = &self.root;
         while let Some(node) = next_node {
@@ -88,6 +97,7 @@ impl<T: Ord> BinarySearchTree<T> {
         }
         None
     }
+    /// Left, node, right — yields the values in sorted order.
     pub fn inorder(&self) -> Vec<T>
     // sorted sequence
     where
@@ -108,6 +118,7 @@ impl<T: Ord> BinarySearchTree<T> {
         }
     }
 
+    /// Node, left, right.
     pub fn preorder(&self) -> Vec<T>
     where
         T: Clone,
@@ -127,6 +138,7 @@ impl<T: Ord> BinarySearchTree<T> {
         }
     }
 
+    /// Left, right, node.
     pub fn postorder(&self) -> Vec<T>
     where
         T: Clone,
@@ -197,9 +209,7 @@ impl<T: Ord> BinarySearchTree<T> {
                     }
                 }
             }
-            None => {
-                None
-            }
+            None => None,
         }
     }
 }

@@ -3,6 +3,11 @@ use std::{
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
 };
 
+/// Graph stored as an adjacency list, usable as directed or undirected.
+///
+/// Nodes are `usize` ids and every edge carries a `u32` weight (pass `1` to ignore
+/// weights). In an undirected graph `add_edge` stores the edge in both directions,
+/// which is why [`Graph::edge_count`] halves the total.
 #[derive(Debug)]
 pub struct Graph {
     adj: HashMap<usize, Vec<(usize, u32)>>, // (neighbour, weight)
@@ -20,6 +25,9 @@ impl Graph {
     pub fn add_node(&mut self, id: usize) {
         self.adj.entry(id).or_default();
     }
+    /// Adds an edge, creating either endpoint if needed.
+    ///
+    /// In an undirected graph the reverse edge is stored as well.
     pub fn add_edge(&mut self, from: usize, to: usize, weight: u32) {
         self.adj.entry(from).or_default().push((to, weight));
         if !self.directed {
@@ -49,6 +57,7 @@ impl Graph {
     // ALGS
     //
     // BFS
+    /// Breadth-first traversal from `start`, returning nodes in visit order.
     pub fn bfs(&self, start: usize) -> Vec<usize> {
         let mut waiting: VecDeque<usize> = VecDeque::new();
         let mut visited: HashSet<usize> = HashSet::new();
@@ -71,6 +80,8 @@ impl Graph {
         result
     }
 
+    /// Shortest path by number of hops, found with BFS and rebuilt from a `prev` map.
+    ///
     pub fn shortest_path_unweighted(&self, start: usize, end: usize) -> Option<Vec<usize>> {
         if start == end {
             return Some(vec![start]);
@@ -106,6 +117,7 @@ impl Graph {
 
         None
     }
+    /// Returns `true` if one BFS pass from an arbitrary node reaches every other node.
     pub fn is_connected(&self) -> bool {
         // KNOWN LIMITATION: for directed graphs this only checks reachability
         // from one arbitrary node following outgoing edges, not true weak
@@ -117,13 +129,15 @@ impl Graph {
 
         // take whatever node
         if let Some(node) = self.adj.keys().next()
-            && self.bfs(*node).len() == self.node_count() {
-                return true;
-            }
+            && self.bfs(*node).len() == self.node_count()
+        {
+            return true;
+        }
         false
     }
 
     // DFS
+    /// Depth-first traversal from `start`
     pub fn dfs_iterative(&self, start: usize) -> Vec<usize> {
         let mut stack: Vec<usize> = vec![start];
         let mut visited = HashSet::new();
@@ -163,6 +177,7 @@ impl Graph {
         }
     }
 
+    /// Depth-first traversal from `start` using recursion
     pub fn dfs_recursive(&self, start: usize) -> Vec<usize> {
         let mut result: Vec<usize> = Vec::new();
         let mut visited: HashSet<usize> = HashSet::new();
@@ -209,10 +224,10 @@ impl Graph {
                 if in_progress.contains(nei) {
                     return true;
                 }
-                if !visited.contains(nei)
-                    && self._cycle_helper_directed(*nei, in_progress, visited) {
-                        return true;
-                    }
+                if !visited.contains(nei) && self._cycle_helper_directed(*nei, in_progress, visited)
+                {
+                    return true;
+                }
             }
         }
 
@@ -229,9 +244,10 @@ impl Graph {
         if !self.directed {
             for node in self.adj.keys() {
                 if !visited.contains(node)
-                    && self._cycle_helper_undirected(*node, None, &mut visited) {
-                        return true;
-                    }
+                    && self._cycle_helper_undirected(*node, None, &mut visited)
+                {
+                    return true;
+                }
             }
             false
         }
@@ -240,9 +256,10 @@ impl Graph {
             let mut in_progress = HashSet::new();
             for node in self.adj.keys() {
                 if !visited.contains(node)
-                    && self._cycle_helper_directed(*node, &mut in_progress, &mut visited) {
-                        return true;
-                    }
+                    && self._cycle_helper_directed(*node, &mut in_progress, &mut visited)
+                {
+                    return true;
+                }
             }
             false
         }
@@ -263,9 +280,10 @@ impl Graph {
                     return true;
                 }
                 if !visited.contains(&nei)
-                    && self.top_sort_helper_dfs(nei, in_progress, visited, result) {
-                        return true;
-                    }
+                    && self.top_sort_helper_dfs(nei, in_progress, visited, result)
+                {
+                    return true;
+                }
             }
         }
         in_progress.remove(&node);
@@ -275,15 +293,17 @@ impl Graph {
         false
     }
 
+    /// Orders nodes so every edge points forward, or returns `None` if a cycle exists.
     pub fn topological_sort(&self) -> Option<Vec<usize>> {
         let mut visited = HashSet::new();
         let mut in_progress = HashSet::new();
         let mut result = Vec::new();
         for &node in self.adj.keys() {
             if !visited.contains(&node)
-                && self.top_sort_helper_dfs(node, &mut in_progress, &mut visited, &mut result) {
-                    return None;
-                }
+                && self.top_sort_helper_dfs(node, &mut in_progress, &mut visited, &mut result)
+            {
+                return None;
+            }
         }
 
         result.reverse();
@@ -291,6 +311,10 @@ impl Graph {
     }
 
     // Dijkstra
+    /// Shortest weighted distance from `start` to every reachable node.
+    ///
+    /// Uses a `BinaryHeap` wrapped in `Reverse` to turn Rust's max-heap into the
+    /// min-heap Dijkstra needs. Unreachable nodes are simply absent from the map.
     pub fn dijkstra(&self, start: usize) -> HashMap<usize, u32> {
         let mut dist: HashMap<usize, u32> = HashMap::from([(start, 0)]);
         let mut pqueue = BinaryHeap::new();
@@ -322,7 +346,7 @@ impl Graph {
 
         dist
     }
-    // NOTE: the  loop below duplicates `dijkstra` above on purpose.
+    /// Cheapest path from `start` to `end`, as `(total cost, node sequence)`.
     // kept separate for educational reasons - each algorithm stays readable
     pub fn shortest_path_weighted(&self, start: usize, end: usize) -> Option<(u32, Vec<usize>)> {
         let mut dist: HashMap<usize, u32> = HashMap::from([(start, 0)]);

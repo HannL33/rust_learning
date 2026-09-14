@@ -1,3 +1,11 @@
+//! Binary max-heap stored in a flat `Vec`, plus heapsort built on top of it.
+
+/// Binary max-heap backed by a `Vec`, where the largest element is always at index 0.
+///
+/// The tree is implicit in the indices:
+/// - Parent: `(i - 1) / 2`
+/// - Left child: `2 * i + 1`
+/// - Right child: `2 * i + 2`
 #[derive(Debug)]
 pub struct MaxHeap<T> {
     data: Vec<T>,
