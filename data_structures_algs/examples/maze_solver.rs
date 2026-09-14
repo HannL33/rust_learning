@@ -23,11 +23,11 @@ struct Maze {
 impl Maze {
     fn new(lines: Vec<Line>, contents: String) -> Maze {
         let mut maze = Maze {
-            lines: lines,
+            lines,
             cell_size: 0,
             n_maze: 0,
             offset: 0,
-            contents: contents,
+            contents,
         };
         let mut unique_x1: Vec<usize> = maze.lines.iter().map(|line| line.x1).collect();
         let minimum_distance: Vec<usize> = maze
@@ -53,81 +53,80 @@ impl Maze {
             .expect("Something wrong with regex");
         for (_, [x1, y1, x2, y2]) in re.captures_iter(&contents).map(|c| c.extract()) {
             extracted_lines.push(Line {
-                x1: x1.parse().unwrap(),
-                y1: y1.parse().unwrap(),
-                x2: x2.parse().unwrap(),
-                y2: y2.parse().unwrap(),
+                x1: x1.parse().expect("x1 should be a valid number"),
+                y1: y1.parse().expect("y1 should be a valid number"),
+                x2: x2.parse().expect("x2 should be a valid number"),
+                y2: y2.parse().expect("y2 should be a valid number"),
             });
         }
-        let maze = Maze::new(extracted_lines, contents);
-        maze
+        Maze::new(extracted_lines, contents)
     }
     fn parse_into_graph(&self) -> (Graph, usize, usize) {
         let mut graph = Graph::new(false);
-        let iter_cart: Vec<_> = (0..=self.n_maze - 1)
-            .into_iter()
-            .flat_map(|x| (0..=self.n_maze - 1).into_iter().map(move |y| (x, y)))
-            .collect();
-        let mut entry_id = 0;
-        let mut exit_id = 0;
-        for (r, c) in iter_cart {
-            // id in graph of the cell
-            let curr_id = r * self.n_maze + c + 1;
-            // check for upper entry
-            if r == 0 {
-                let y_up = self.offset;
-                let x_up = self.offset + c * self.cell_size;
-                let x_up_next = self.offset + (c + 1) * self.cell_size;
-                if !(self
-                    .lines
-                    .iter()
-                    .any(|line| line.y1 == y_up && line.x1 <= x_up && line.x2 >= x_up_next))
-                {
-                    entry_id = curr_id;
-                    println!("Found upper entry: {}", entry_id);
+        let mut entry_id = None;
+        let mut exit_id = None;
+        for r in 0..self.n_maze {
+            for c in 0..self.n_maze {
+                // id in graph of the cell
+                let curr_id = r * self.n_maze + c + 1;
+                // check for upper entry
+                if r == 0 {
+                    let y_up = self.offset;
+                    let x_up = self.offset + c * self.cell_size;
+                    let x_up_next = self.offset + (c + 1) * self.cell_size;
+                    if !(self
+                        .lines
+                        .iter()
+                        .any(|line| line.y1 == y_up && line.x1 <= x_up && line.x2 >= x_up_next))
+                    {
+                        entry_id = Some(curr_id);
+                        println!("Found upper entry: {}", curr_id);
+                    }
                 }
-            }
-            // check for bottom exit
-            if r == self.n_maze - 1 {
-                let y_down = self.offset + self.n_maze * self.cell_size;
-                let x_down = self.offset + c * self.cell_size;
-                let x_down_next = self.offset + (c + 1) * self.cell_size;
-                if !(self
-                    .lines
-                    .iter()
-                    .any(|line| line.y1 == y_down && line.x1 <= x_down && line.x2 >= x_down_next))
-                {
-                    exit_id = curr_id;
-                    println!("Found lower exit: {}", exit_id);
+                // check for bottom exit
+                if r == self.n_maze - 1 {
+                    let y_down = self.offset + self.n_maze * self.cell_size;
+                    let x_down = self.offset + c * self.cell_size;
+                    let x_down_next = self.offset + (c + 1) * self.cell_size;
+                    if !(self.lines.iter().any(|line| {
+                        line.y1 == y_down && line.x1 <= x_down && line.x2 >= x_down_next
+                    })) {
+                        exit_id = Some(curr_id);
+                        println!("Found lower exit: {}", curr_id);
+                    }
                 }
-            }
-            // check if the right neighbor exist (r, c+1)
-            let x_from = self.offset + (c + 1) * self.cell_size;
-            let y_from = self.offset + r * self.cell_size;
-            let y_to = self.offset + (r + 1) * self.cell_size;
+                // check if the right neighbor exist (r, c+1)
+                let x_from = self.offset + (c + 1) * self.cell_size;
+                let y_from = self.offset + r * self.cell_size;
+                let y_to = self.offset + (r + 1) * self.cell_size;
 
-            if !(self
-                .lines
-                .iter()
-                .any(|line| line.x1 == x_from && line.y1 <= y_from && line.y2 >= y_to)
-                || c + 1 >= self.n_maze)
-            {
-                graph.add_edge(curr_id, r * self.n_maze + c + 2, 1);
-            }
-            // check if the bot neighbor exist (r+1, c)
-            let y_from = self.offset + (r + 1) * self.cell_size;
-            let x_from = self.offset + c * self.cell_size;
-            let x_to = self.offset + (c + 1) * self.cell_size;
-            if !(self
-                .lines
-                .iter()
-                .any(|line| line.y1 == y_from && line.x1 <= x_from && line.x2 >= x_to)
-                || r + 1 >= self.n_maze)
-            {
-                graph.add_edge(curr_id, (r + 1) * self.n_maze + c + 1, 1);
+                if !(self
+                    .lines
+                    .iter()
+                    .any(|line| line.x1 == x_from && line.y1 <= y_from && line.y2 >= y_to)
+                    || c + 1 >= self.n_maze)
+                {
+                    graph.add_edge(curr_id, r * self.n_maze + c + 2, 1);
+                }
+                // check if the bot neighbor exist (r+1, c)
+                let y_from = self.offset + (r + 1) * self.cell_size;
+                let x_from = self.offset + c * self.cell_size;
+                let x_to = self.offset + (c + 1) * self.cell_size;
+                if !(self
+                    .lines
+                    .iter()
+                    .any(|line| line.y1 == y_from && line.x1 <= x_from && line.x2 >= x_to)
+                    || r + 1 >= self.n_maze)
+                {
+                    graph.add_edge(curr_id, (r + 1) * self.n_maze + c + 1, 1);
+                }
             }
         }
-        (graph, entry_id, exit_id)
+        (
+            graph,
+            entry_id.expect("No entrance found in maze"),
+            exit_id.expect("No exit found in maze"),
+        )
     }
     fn solve_graph_and_save(&self, path_solved_exit: &str) {
         let (graph, entry_id, exit_id) = self.parse_into_graph();
@@ -168,7 +167,7 @@ fn div_rem(dividend: usize, divisor: usize) -> (usize, usize) {
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 3 {
-        println!("Usage: maze <input_path.svg> <output_path.svg");
+        println!("Usage: maze <input_path.svg> <output_path.svg>");
         exit(1);
     }
     let path = &args[1];
