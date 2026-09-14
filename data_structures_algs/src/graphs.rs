@@ -160,7 +160,7 @@ impl Graph {
         }
         result
     }
-    fn _dfs_recursive_helper(
+    fn dfs_recursive_helper(
         &self,
         start: usize,
         visited: &mut HashSet<usize>,
@@ -171,7 +171,7 @@ impl Graph {
         if let Some(neis) = self.neighbors(start) {
             for (nei, _) in neis {
                 if !visited.contains(nei) {
-                    self._dfs_recursive_helper(*nei, visited, result);
+                    self.dfs_recursive_helper(*nei, visited, result);
                 }
             }
         }
@@ -182,12 +182,12 @@ impl Graph {
         let mut result: Vec<usize> = Vec::new();
         let mut visited: HashSet<usize> = HashSet::new();
 
-        self._dfs_recursive_helper(start, &mut visited, &mut result);
+        self.dfs_recursive_helper(start, &mut visited, &mut result);
 
         result
     }
 
-    fn _cycle_helper_undirected(
+    fn cycle_helper_undirected(
         &self,
         node: usize,
         parent: Option<usize>,
@@ -198,7 +198,7 @@ impl Graph {
         if let Some(neis) = self.neighbors(node) {
             for (nei, _) in neis {
                 if !visited.contains(nei) {
-                    if self._cycle_helper_undirected(*nei, Some(node), visited) {
+                    if self.cycle_helper_undirected(*nei, Some(node), visited) {
                         return true;
                     }
                 } else {
@@ -244,7 +244,7 @@ impl Graph {
         if !self.directed {
             for node in self.adj.keys() {
                 if !visited.contains(node)
-                    && self._cycle_helper_undirected(*node, None, &mut visited)
+                    && self.cycle_helper_undirected(*node, None, &mut visited)
                 {
                     return true;
                 }
@@ -626,7 +626,7 @@ mod tests {
     #[test]
     fn test_topological_sort_respects_edge_directions() {
         let mut graph = Graph::new(true);
-        // classic example: independent branches (5, 7, 3) converging through 11 and 8
+        // independent branches (5, 7, 3) converging through 11 and 8
         let edges = vec![
             (5, 11),
             (7, 11),

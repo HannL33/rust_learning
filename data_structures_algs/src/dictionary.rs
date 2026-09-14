@@ -66,8 +66,7 @@ impl<K: Hash + Eq, V> Dictionary<K, V> {
     }
     fn resize(&mut self) {
         let new_len: usize = self.len * 2;
-        self.len = new_len; // I do not now if this is safe... But to use hash, i need it
-        // as it is condensed into the method, perhaps hash should be free function...
+        self.len = new_len;
 
         let mut new_buckets: Vec<Vec<(K, V)>> = (0..new_len).map(|_| Vec::new()).collect();
         let old_bucks = take(&mut self.buckets);
@@ -81,7 +80,7 @@ impl<K: Hash + Eq, V> Dictionary<K, V> {
         self.buckets = new_buckets;
     }
     /// Maps a key to a bucket index using `DefaultHasher` modulo the bucket count.
-    pub fn hash(&self, key: &K) -> usize {
+    fn hash(&self, key: &K) -> usize {
         let mut hasher = DefaultHasher::new();
         key.hash(&mut hasher);
         hasher.finish() as usize % self.len
@@ -114,7 +113,6 @@ mod tests {
         dict.insert("a".to_string(), 1);
         dict.insert("a".to_string(), 99);
         assert_eq!(dict.get(&"a".to_string()), Some(&99));
-        // sprawdz ze nie ma duplikatow - powinien byc tylko jeden wpis
         let index = dict.hash(&"a".to_string());
         assert_eq!(dict.buckets[index].len(), 1);
     }
@@ -166,7 +164,7 @@ mod tests {
     #[test]
     fn dict_resize_triggered_and_data_intact() {
         let mut dict: Dictionary<i32, i32> = Dictionary::new();
-        // 13 elementow przekroczy 0.75 * 16 = 12 -> resize do 32 kubelkow
+        // 13 elements surpass  0.75 * 16 = 12 -> resize up to 32 buckets
         for i in 0..20 {
             dict.insert(i, i * 10);
         }
@@ -186,7 +184,7 @@ mod tests {
         for i in 0..20 {
             let expected_bucket = dict.hash(&i);
             let found = dict.buckets[expected_bucket].iter().any(|(k, _)| *k == i);
-            assert!(found, "klucz {} nie jest w kubełku {}", i, expected_bucket);
+            assert!(found, "key {} is not in bucket {}", i, expected_bucket);
         }
         let total: usize = dict.buckets.iter().map(|b| b.len()).sum();
         assert_eq!(total, 20);
