@@ -22,7 +22,7 @@ fn main() -> eframe::Result {
                         .min_size(egui::vec2(96.0, 96.0));
 
                     if ui.add(btn).clicked() {
-                        clicked_idx = Some(idx + 1);
+                        clicked_idx = Some(idx);
                     }
                     if (idx + 1) % 3 == 0 {
                         ui.end_row();
