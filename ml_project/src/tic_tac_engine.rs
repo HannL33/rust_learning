@@ -105,3 +105,17 @@ pub fn available_moves(board: &Board) -> Option<Vec<usize>> {
         None
     }
 }
+
+pub fn whos_turn(board: &Board) -> Player {
+    let n_o = board
+        .board
+        .iter()
+        .filter(|&x| *x == Cell::Taken(Player::O))
+        .count();
+    let n_x = board
+        .board
+        .iter()
+        .filter(|&x| *x == Cell::Taken(Player::X))
+        .count();
+    if n_x > n_o { Player::O } else { Player::X }
+}
