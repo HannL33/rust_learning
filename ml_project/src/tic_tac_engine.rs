@@ -4,6 +4,49 @@ pub enum Cell {
     Taken(Player),
 }
 
+pub struct Game {
+    board: Board,
+    current_turn: Player,
+    result: GameResult,
+}
+impl Game {
+    pub fn new() -> Self {
+        Game {
+            board: Board::new(),
+            current_turn: Player::X,
+            result: GameResult::InProgress,
+        }
+    }
+    pub fn play(&mut self, position: usize) -> Result<(), MoveError> {
+        if self.result != GameResult::InProgress {
+            return Err(MoveError::CellError(
+                "Cannot play the game as it is over already!".to_string(),
+            ));
+        }
+        match apply_move(self.board, position, self.current_turn) {
+            Ok(new_board) => {
+                self.board = new_board;
+                match self.current_turn {
+                    Player::O => self.current_turn = Player::X,
+                    Player::X => self.current_turn = Player::O,
+                };
+                self.result = check_winner(&self.board);
+                Ok(())
+            }
+            Err(error) => Err(error),
+        }
+    }
+    pub fn board(&self) -> &Board {
+        &self.board
+    }
+    pub fn turn(&self) -> Player {
+        self.current_turn
+    }
+    pub fn result(&self) -> GameResult {
+        self.result
+    }
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct Board {
     // indices, 0-based everywhere in this engine:

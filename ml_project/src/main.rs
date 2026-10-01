@@ -1,57 +1,128 @@
-use eframe::egui;
 use ml_project::tic_tac_engine as tte;
 
 fn main() -> eframe::Result {
-    let mut my_board = tte::Board::new();
-    let mut text_to_show_up: Option<String> = None;
-    let options = eframe::NativeOptions::default();
+    let options = eframe::NativeOptions {
+        viewport: eframe::egui::ViewportBuilder::default().with_inner_size([420.0, 520.0]),
+        ..Default::default()
+    };
+    eframe::run_native(
+        "Tic-Tac-Toe",
+        options,
+        Box::new(|_| Ok(Box::<MyApp>::default())),
+    )
+}
 
-    eframe::run_ui_native("My egui App", options, move |ui, _frame| {
-        egui::CentralPanel::default().show(ui, |ui| {
-            let mut clicked_idx: Option<usize> = None;
-            ui.heading("Tic-Tac-Toe");
-            egui::Grid::new("board").spacing([8.0, 8.0]).show(ui, |ui| {
+#[derive(PartialEq, Clone, Copy)]
+enum Mode {
+    ManVsMan,
+    ManVsMachine,
+    MachineVsMachine,
+}
+
+struct MyApp {
+    game: tte::Game,
+    mode: Mode,
+}
+impl Default for MyApp {
+    fn default() -> Self {
+        Self {
+            game: tte::Game::new(),
+            mode: Mode::ManVsMan,
+        }
+    }
+}
+impl MyApp {
+    /// Draw the current board and returns the field that was clicked
+    fn board_ui(&self, ui: &mut eframe::egui::Ui) -> Option<usize> {
+        let mut clicked = None;
+
+        ui.heading("Tic-Tac-Toe");
+        eframe::egui::Grid::new("board")
+            .spacing([8.0, 8.0])
+            .show(ui, |ui| {
                 // print current board as buttons
-                for (idx, elem) in my_board.cells().enumerate() {
+                for (idx, elem) in self.game.board().cells().enumerate() {
                     let label = match elem {
                         tte::Cell::Empty => " ",
                         tte::Cell::Taken(tte::Player::O) => "O",
                         tte::Cell::Taken(tte::Player::X) => "X",
                     };
-                    let btn = egui::Button::new(egui::RichText::new(label).size(34.0).strong())
-                        .min_size(egui::vec2(96.0, 96.0));
+                    let btn = eframe::egui::Button::new(
+                        eframe::egui::RichText::new(label).size(34.0).strong(),
+                    )
+                    .min_size(eframe::egui::vec2(96.0, 96.0))
+                    .fill(eframe::egui::Color32::DARK_GRAY)
+                    .stroke(eframe::egui::Stroke::new(5.0, eframe::egui::Color32::RED));
 
-                    if ui.add(btn).clicked() {
-                        clicked_idx = Some(idx);
+                    if ui
+                        .add_enabled(self.game.result() == tte::GameResult::InProgress, btn)
+                        .clicked()
+                    {
+                        clicked = Some(idx);
                     }
                     if (idx + 1) % 3 == 0 {
                         ui.end_row();
                     }
                 }
             });
-            match tte::check_winner(&my_board) {
-                tte::GameResult::Draw => {
-                    ui.label("The game is a draw");
+        ui.vertical(|ui| {
+            if self.game.result() == tte::GameResult::InProgress {
+                ui.label(format!("The turn is for {:?}", self.game.turn()))
+            } else {
+                ui.label(format!("The result is: {:?}", self.game.result()))
+            }
+        });
+        return clicked;
+    }
+}
+impl eframe::App for MyApp {
+    fn ui(&mut self, ui: &mut eframe::egui::Ui, _frame: &mut eframe::Frame) {
+        eframe::egui::CentralPanel::default().show(ui, |ui| {
+            ui.horizontal(|ui| {
+                if ui
+                    .selectable_label(self.mode == Mode::ManVsMan, "ManVsMan")
+                    .clicked()
+                {
+                    self.mode = Mode::ManVsMan;
+                    self.game = tte::Game::new();
                 }
-                tte::GameResult::InProgress => {}
-                tte::GameResult::Win(tte::Player::O) => {
-                    ui.label("Player O win");
+                if ui
+                    .selectable_label(self.mode == Mode::ManVsMachine, "ManVsMachine")
+                    .clicked()
+                {
+                    self.mode = Mode::ManVsMachine;
+                    self.game = tte::Game::new();
+                };
+                if ui
+                    .selectable_label(self.mode == Mode::MachineVsMachine, "MachineVsMachine")
+                    .clicked()
+                {
+                    self.mode = Mode::MachineVsMachine;
+                    self.game = tte::Game::new();
+                };
+            });
+            match self.mode {
+                Mode::ManVsMan => {
+                    if let Some(clicked_idx) = self.board_ui(ui) {
+                        match self.game.play(clicked_idx) {
+                            Ok(_) => {}
+                            Err(error) => println!("Error: {:?}", error),
+                        }
+                    }
                 }
-                tte::GameResult::Win(tte::Player::X) => {
-                    ui.label("Player X win");
+                Mode::ManVsMachine => {
+                    ui.label("ManVsMachine not implemented yet".to_string());
+                }
+                Mode::MachineVsMachine => {
+                    ui.label("MachineVsMachine not implemented yet".to_string());
                 }
             };
 
-            if let Some(idx) = clicked_idx {
-                match tte::apply_move(my_board, idx, tte::whos_turn(&my_board)) {
-                    Ok(new_board) => {
-                        my_board = new_board;
-                        text_to_show_up = None;
-                    }
-                    Err(tte::MoveError::CellError(msg)) => text_to_show_up = Some(msg),
+            ui.centered_and_justified(|ui| {
+                if ui.button("New Game").clicked() {
+                    self.game = tte::Game::new();
                 }
-            }
-            ui.label(text_to_show_up.as_deref().unwrap_or(""));
+            });
         });
-    })
+    }
 }
