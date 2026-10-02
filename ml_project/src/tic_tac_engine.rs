@@ -72,6 +72,14 @@ pub enum Player {
     X,
     O,
 }
+impl Player {
+    pub fn opposite(self) -> Self {
+        match self {
+            Self::X => Self::O,
+            Self::O => Self::X,
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum MoveError {
