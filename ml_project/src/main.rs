@@ -1,5 +1,6 @@
+use eframe::egui;
+use ml_project::tic_tac_bot as ttb;
 use ml_project::tic_tac_engine as tte;
-
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
@@ -24,12 +25,14 @@ enum Mode {
 struct MyApp {
     game: tte::Game,
     mode: Mode,
+    human_player: tte::Player,
 }
 impl Default for MyApp {
     fn default() -> Self {
         Self {
             game: tte::Game::new(),
             mode: Mode::ManVsMan,
+            human_player: tte::Player::X,
         }
     }
 }
@@ -132,7 +135,31 @@ impl eframe::App for MyApp {
                     }
                 }
                 Mode::ManVsMachine => {
-                    ui.label("ManVsMachine not implemented yet".to_string());
+                    egui::ComboBox::from_label("Which side you wanna choose?")
+                        .selected_text(format!("{:?}", self.human_player))
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut self.human_player, tte::Player::X, "X");
+                            ui.selectable_value(&mut self.human_player, tte::Player::O, "O");
+                        });
+
+                    if let Some(clicked_idx) = self.board_ui(ui) {
+                        if self.game.turn() == self.human_player {
+                            match self.game.play(clicked_idx) {
+                                Ok(_) => {}
+                                Err(error) => println!("Error: {:?}", error),
+                            }
+                        }
+                    }
+                    if self.game.turn() != self.human_player
+                        && self.game.result() == tte::GameResult::InProgress
+                    {
+                        let best_move_machine =
+                            ttb::best_move(*self.game.board(), self.human_player.opposite());
+                        match self.game.play(best_move_machine) {
+                            Ok(_) => {}
+                            Err(error) => println!("Error: {:?}", error),
+                        }
+                    }
                 }
                 Mode::MachineVsMachine => {
                     ui.label("MachineVsMachine not implemented yet".to_string());

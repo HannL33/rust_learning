@@ -22,7 +22,6 @@ pub fn minimax(board: tte::Board, is_maximizing: bool, bot: tte::Player, depth: 
                     .iter()
                     .max()
                     .expect("There is always maximum i think");
-                println!("Current score: {:?} for board {:?}", result, board);
                 result
             } else {
                 let mut score_vec = Vec::new();
@@ -39,7 +38,6 @@ pub fn minimax(board: tte::Board, is_maximizing: bool, bot: tte::Player, depth: 
                     .iter()
                     .min()
                     .expect("There is always minimum i think");
-                println!("Current score: {:?} for board {:?}", result, board);
                 result
             }
         }
@@ -54,7 +52,7 @@ pub fn minimax(board: tte::Board, is_maximizing: bool, bot: tte::Player, depth: 
     }
 }
 
-fn best_move(board: tte::Board, player: tte::Player) -> usize {
+pub fn best_move(board: tte::Board, player: tte::Player) -> usize {
     let mut best_eval_move = (-10, 0);
     for (idx, cell) in board.cells().enumerate() {
         if cell == tte::Cell::Empty {
