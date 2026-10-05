@@ -1,8 +1,11 @@
+use eframe::wgpu::naga::valid::LiteralError::Infinity;
+
 use crate::tic_tac_engine as tte;
 
 /// Searches to the end of the game and scores the position from `bot`'s perspective.
 /// `is_maximizing` is true on the bots turn and false on the opponents turn.
-pub fn minimax(board: tte::Board, is_maximizing: bool, bot: tte::Player) -> i32 {
+pub fn minimax(board: tte::Board, is_maximizing: bool, bot: tte::Player, count: &mut usize) -> i32 {
+    *count += 1;
     match tte::check_winner(&board) {
         tte::GameResult::InProgress => {
             if is_maximizing {
@@ -12,7 +15,7 @@ pub fn minimax(board: tte::Board, is_maximizing: bool, bot: tte::Player) -> i32 
                         let board = tte::apply_move(board, idx, bot).expect(
                             "expected the best after the unpacking apply move error in minimax",
                         );
-                        score_vec.push(minimax(board, !is_maximizing, bot))
+                        score_vec.push(minimax(board, !is_maximizing, bot, count))
                     }
                 }
                 let result = *score_vec
@@ -27,7 +30,95 @@ pub fn minimax(board: tte::Board, is_maximizing: bool, bot: tte::Player) -> i32 
                         let board = tte::apply_move(board, idx, bot.opposite()).expect(
                             "expected the best after the unpacking apply move error in minimax",
                         );
-                        score_vec.push(minimax(board, !is_maximizing, bot))
+                        score_vec.push(minimax(board, !is_maximizing, bot, count))
+                    }
+                }
+                let result = *score_vec
+                    .iter()
+                    .min()
+                    .expect("There is always minimum i think");
+                result
+            }
+        }
+        tte::GameResult::Draw => return 0,
+        tte::GameResult::Win(winner) => {
+            if winner == bot {
+                10
+            } else {
+                -10
+            }
+        }
+    }
+}
+
+pub fn minimax_alpha_beta(
+    board: tte::Board,
+    is_maximizing: bool,
+    bot: tte::Player,
+    mut alpha: i32,
+    mut beta: i32,
+    count: &mut usize,
+) -> i32 {
+    *count += 1;
+    match tte::check_winner(&board) {
+        tte::GameResult::InProgress => {
+            if is_maximizing {
+                let mut score_vec = Vec::new();
+                for (idx, cell) in board.cells().enumerate() {
+                    if cell == tte::Cell::Empty {
+                        let board = tte::apply_move(board, idx, bot).expect(
+                            "expected the best after the unpacking apply move error in minimax",
+                        );
+                        score_vec.push(minimax_alpha_beta(
+                            board,
+                            !is_maximizing,
+                            bot,
+                            alpha,
+                            beta,
+                            count,
+                        ));
+                        let result = *score_vec
+                            .iter()
+                            .max()
+                            .expect("There is always maximum i think");
+                        if result >= alpha {
+                            alpha = result;
+                        }
+                        if alpha >= beta {
+                            break;
+                        }
+                    }
+                }
+                let result = *score_vec
+                    .iter()
+                    .max()
+                    .expect("There is always maximum i think");
+                result
+            } else {
+                let mut score_vec = Vec::new();
+                for (idx, cell) in board.cells().enumerate() {
+                    if cell == tte::Cell::Empty {
+                        let board = tte::apply_move(board, idx, bot.opposite()).expect(
+                            "expected the best after the unpacking apply move error in minimax",
+                        );
+                        score_vec.push(minimax_alpha_beta(
+                            board,
+                            !is_maximizing,
+                            bot,
+                            alpha,
+                            beta,
+                            count,
+                        ));
+                        let result = *score_vec
+                            .iter()
+                            .min()
+                            .expect("There is always maximum i think");
+                        if result <= beta {
+                            beta = result;
+                        }
+                        if alpha >= beta {
+                            break;
+                        }
                     }
                 }
                 let result = *score_vec
@@ -55,11 +146,14 @@ pub fn best_move(board: tte::Board, player: tte::Player) -> Option<usize> {
         return None;
     }
     let mut best_eval_move = (-10, None);
+    // for comparison, i will add counter for the best_move and best_move_alpha_beta
+    // to see number of positions analyzed
+    let mut count = 0;
     for (idx, cell) in board.cells().enumerate() {
         if cell == tte::Cell::Empty {
             let _board = tte::apply_move(board, idx, player)
                 .expect("Something wrong happen during the apply move in best move!");
-            let eval = minimax(_board, false, player);
+            let eval = minimax(_board, false, player, &mut count);
             if eval == 10 {
                 return Some(idx);
             } else if eval >= best_eval_move.0 {
@@ -68,6 +162,36 @@ pub fn best_move(board: tte::Board, player: tte::Player) -> Option<usize> {
             }
         }
     }
+    println!("Analyzed: {} positions in best_move.", count);
+    best_eval_move.1
+}
+pub fn best_move_alpha_beta(board: tte::Board, player: tte::Player) -> Option<usize> {
+    if tte::check_winner(&board) != tte::GameResult::InProgress {
+        return None;
+    }
+    let mut best_eval_move = (-10, None);
+
+    // for comparison, i will add counter for the best_move and best_move_alpha_beta
+    // to see number of positions analyzed
+    let mut count = 0;
+    let mut alpha = i32::MIN;
+    let beta = i32::MAX;
+
+    for (idx, cell) in board.cells().enumerate() {
+        if cell == tte::Cell::Empty {
+            let _board = tte::apply_move(board, idx, player)
+                .expect("Something wrong happen during the apply move in best move!");
+            let eval = minimax_alpha_beta(_board, false, player, alpha, beta, &mut count);
+            if eval == 10 {
+                return Some(idx);
+            } else if best_eval_move.1.is_none() || eval > best_eval_move.0 {
+                best_eval_move.0 = eval;
+                best_eval_move.1 = Some(idx);
+                alpha = alpha.max(eval);
+            }
+        }
+    }
+    println!("Analyzed: {} positions in best_move_alpha_beta.", count);
     best_eval_move.1
 }
 

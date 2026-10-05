@@ -55,7 +55,13 @@ fn main() -> Result<(), tte::MoveError> {
             board = tte::apply_move(board, position, player)?;
         }
         assert_eq!(tte::whos_turn(&board), bot);
-        let actual = ttb::minimax(board, true, bot);
+        let actual = ttb::minimax_alpha_beta(
+            board,
+            true,
+            bot,
+            &mut i32::MIN.clone(),
+            &mut i32::MAX.clone(),
+        );
         assert_eq!(actual, expected, "{name}");
         results.push((name, bot, expected, actual));
     }
