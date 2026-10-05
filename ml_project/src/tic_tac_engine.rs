@@ -9,6 +9,11 @@ pub struct Game {
     current_turn: Player,
     result: GameResult,
 }
+impl Default for Game {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl Game {
     pub fn new() -> Self {
         Game {
@@ -54,6 +59,11 @@ pub struct Board {
     // 3 4 5
     // 6 7 8
     board: [Cell; 9],
+}
+impl Default for Board {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 impl Board {
     pub fn new() -> Board {
@@ -132,10 +142,10 @@ pub fn check_winner(board: &Board) -> GameResult {
             return GameResult::Win(Player::X);
         }
     }
-    if board.board.iter().any(|&x| x == Cell::Empty) {
+    if board.board.contains(&Cell::Empty) {
         return GameResult::InProgress;
     }
-    return GameResult::Draw;
+    GameResult::Draw
 }
 pub fn available_moves(board: &Board) -> Option<Vec<usize>> {
     if check_winner(board) == GameResult::InProgress {

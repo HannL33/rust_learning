@@ -142,25 +142,24 @@ impl eframe::App for MyApp {
                             ui.selectable_value(&mut self.human_player, tte::Player::O, "O");
                         });
 
-                    if let Some(clicked_idx) = self.board_ui(ui) {
-                        if self.game.turn() == self.human_player {
-                            match self.game.play(clicked_idx) {
-                                Ok(_) => {}
-                                Err(error) => println!("Error: {:?}", error),
-                            }
+                    if let Some(clicked_idx) = self.board_ui(ui)
+                        && self.game.turn() == self.human_player
+                    {
+                        match self.game.play(clicked_idx) {
+                            Ok(_) => {}
+                            Err(error) => println!("Error: {:?}", error),
                         }
                     }
                     if self.game.turn() != self.human_player
                         && self.game.result() == tte::GameResult::InProgress
-                    {
-                        if let Some(best_move_machine) = ttb::best_move_alpha_beta(
+                        && let Some(best_move_machine) = ttb::best_move_alpha_beta(
                             *self.game.board(),
                             self.human_player.opposite(),
-                        ) {
-                            match self.game.play(best_move_machine) {
-                                Ok(_) => {}
-                                Err(error) => println!("Error: {:?}", error),
-                            }
+                        )
+                    {
+                        match self.game.play(best_move_machine) {
+                            Ok(_) => {}
+                            Err(error) => println!("Error: {:?}", error),
                         }
                     }
                 }

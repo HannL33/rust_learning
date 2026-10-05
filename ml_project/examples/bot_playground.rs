@@ -2,20 +2,10 @@ use ml_project::tic_tac_bot as ttb;
 use ml_project::tic_tac_engine as tte;
 
 fn main() -> Result<(), tte::MoveError> {
-    // let my_board = tte::Board::new();
-    // let my_board = tte::apply_move(my_board, 4, tte::Player::X)?;
-    // let my_board = tte::apply_move(my_board, 1, tte::Player::O)?;
-    // let my_board = tte::apply_move(my_board, 0, tte::Player::X)?;
-    // let my_board = tte::apply_move(my_board, 8, tte::Player::O)?;
-    // println!("My starting board: {:?}", my_board);
-    // println!(
-    //     "The evaluation of the position: {}",
-    //     ttb::minimax(my_board, true, tte::Player::X)
-    // );
-
     // Indices: 0 1 2 / 3 4 5 / 6 7 8.
     // Each case starts on the bot's turn. Scores are from that bot's perspective.
     let cases = [
+        ("Empty board", ".........", tte::Player::X, 0),
         (
             "X can win: XX. / OO. / XO.",
             "XX.OO.XO.",
@@ -55,21 +45,30 @@ fn main() -> Result<(), tte::MoveError> {
             board = tte::apply_move(board, position, player)?;
         }
         assert_eq!(tte::whos_turn(&board), bot);
-        let actual = ttb::minimax_alpha_beta(
-            board,
-            true,
+        let mut plain_count = 0;
+        let mut pruned_count = 0;
+        let plain = ttb::minimax(board, true, bot, &mut plain_count);
+        let pruned =
+            ttb::minimax_alpha_beta(board, true, bot, i32::MIN, i32::MAX, &mut pruned_count);
+        assert_eq!(plain, expected, "minimax: {name}");
+        assert_eq!(pruned, expected, "alpha-beta: {name}");
+        assert!(pruned_count <= plain_count, "{name}");
+        results.push((
+            name,
             bot,
-            &mut i32::MIN.clone(),
-            &mut i32::MAX.clone(),
-        );
-        assert_eq!(actual, expected, "{name}");
-        results.push((name, bot, expected, actual));
+            expected,
+            plain,
+            pruned,
+            plain_count,
+            pruned_count,
+        ));
     }
 
-    // Print together after minimax's debug output for easy comparison.
     println!("\n--- Minimax comparison (bot's perspective) ---");
-    for (name, bot, expected, actual) in results {
-        println!("{name} | bot: {bot:?} | expected: {expected} | actual: {actual}");
+    for (name, bot, expected, plain, pruned, plain_count, pruned_count) in results {
+        println!(
+            "{name} | bot: {bot:?} | expected: {expected} | minimax: {plain} ({plain_count} nodes) | alpha-beta: {pruned} ({pruned_count} nodes)"
+        );
     }
     Ok(())
 }
