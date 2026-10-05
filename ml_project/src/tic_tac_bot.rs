@@ -61,10 +61,10 @@ pub fn best_move(board: tte::Board, player: tte::Player) -> Option<usize> {
                 .expect("Something wrong happen during the apply move in best move!");
             let eval = minimax(_board, false, player);
             if eval == 10 {
-                return idx;
+                return Some(idx);
             } else if eval >= best_eval_move.0 {
                 best_eval_move.0 = eval;
-                best_eval_move.1 = idx;
+                best_eval_move.1 = Some(idx);
             }
         }
     }
