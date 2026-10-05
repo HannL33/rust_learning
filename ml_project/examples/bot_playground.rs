@@ -10,7 +10,7 @@ fn main() -> Result<(), tte::MoveError> {
     // println!("My starting board: {:?}", my_board);
     // println!(
     //     "The evaluation of the position: {}",
-    //     ttb::minimax(my_board, true, tte::Player::X, 10)
+    //     ttb::minimax(my_board, true, tte::Player::X)
     // );
 
     // Indices: 0 1 2 / 3 4 5 / 6 7 8.
@@ -55,7 +55,8 @@ fn main() -> Result<(), tte::MoveError> {
             board = tte::apply_move(board, position, player)?;
         }
         assert_eq!(tte::whos_turn(&board), bot);
-        let actual = ttb::minimax(board, true, bot, 10);
+        let actual = ttb::minimax(board, true, bot);
+        assert_eq!(actual, expected, "{name}");
         results.push((name, bot, expected, actual));
     }
 

@@ -153,11 +153,13 @@ impl eframe::App for MyApp {
                     if self.game.turn() != self.human_player
                         && self.game.result() == tte::GameResult::InProgress
                     {
-                        let best_move_machine =
-                            ttb::best_move(*self.game.board(), self.human_player.opposite());
-                        match self.game.play(best_move_machine) {
-                            Ok(_) => {}
-                            Err(error) => println!("Error: {:?}", error),
+                        if let Some(best_move_machine) =
+                            ttb::best_move(*self.game.board(), self.human_player.opposite())
+                        {
+                            match self.game.play(best_move_machine) {
+                                Ok(_) => {}
+                                Err(error) => println!("Error: {:?}", error),
+                            }
                         }
                     }
                 }

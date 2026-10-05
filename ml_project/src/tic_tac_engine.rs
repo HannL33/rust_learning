@@ -443,6 +443,70 @@ mod tests {
     // whole game //
 
     #[test]
+    fn game_play_places_marks_and_alternates_turns() {
+        let mut game = Game::new();
+        assert_eq!(game.turn(), Player::X);
+        assert_eq!(game.result(), GameResult::InProgress);
+
+        game.play(0).unwrap();
+        assert_eq!(cells_of(game.board())[0], Cell::Taken(Player::X));
+        assert_eq!(game.turn(), Player::O);
+
+        game.play(4).unwrap();
+        assert_eq!(cells_of(game.board())[4], Cell::Taken(Player::O));
+        assert_eq!(game.turn(), Player::X);
+        assert_eq!(game.result(), GameResult::InProgress);
+    }
+
+    #[test]
+    fn game_rejected_moves_leave_all_state_unchanged() {
+        let mut game = Game::new();
+        game.play(0).unwrap();
+        let before = cells_of(game.board());
+        let turn = game.turn();
+        let result = game.result();
+
+        for position in [0, 9, usize::MAX] {
+            assert!(game.play(position).is_err());
+            assert_eq!(cells_of(game.board()), before);
+            assert_eq!(game.turn(), turn);
+            assert_eq!(game.result(), result);
+        }
+    }
+
+    #[test]
+    fn game_records_a_win_and_rejects_further_moves() {
+        let mut game = Game::new();
+        for position in [0, 3, 1, 4, 2] {
+            game.play(position).unwrap();
+        }
+        assert_eq!(game.result(), GameResult::Win(Player::X));
+        let before = cells_of(game.board());
+        let turn = game.turn();
+
+        assert!(game.play(8).is_err());
+        assert_eq!(cells_of(game.board()), before);
+        assert_eq!(game.turn(), turn);
+        assert_eq!(game.result(), GameResult::Win(Player::X));
+    }
+
+    #[test]
+    fn game_records_a_draw_and_rejects_further_moves() {
+        let mut game = Game::new();
+        for position in [0, 1, 2, 4, 3, 5, 7, 6, 8] {
+            game.play(position).unwrap();
+        }
+        assert_eq!(game.result(), GameResult::Draw);
+        let before = cells_of(game.board());
+        let turn = game.turn();
+
+        assert!(game.play(0).is_err());
+        assert_eq!(cells_of(game.board()), before);
+        assert_eq!(game.turn(), turn);
+        assert_eq!(game.result(), GameResult::Draw);
+    }
+
+    #[test]
     fn a_played_out_game_ends_in_a_win_and_offers_no_further_moves() {
         let board = board_from(&[
             (0, Player::X),
