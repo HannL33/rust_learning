@@ -3,15 +3,15 @@
 
 # Plan nauki Rust — od algorytmów do serwera HTTP
 
-**Profil:** matematyk, junior developer, Python/FastAPI/GenAI background  
-**Styl nauki:** przeplatanie teorii z projektem  
+**Profil:** matematyk, junior developer, Python/FastAPI/GenAI background
+**Styl nauki:** przeplatanie teorii z projektem
 **Szacowany czas całkowity:** 8–12 tygodni
 
 ---
 
 ## MODUŁ 1 — Struktury danych i algorytmy
 
-**Cel:** Opanować ownership, lifetimes i generyki przez ból implementacji, nie przez czytanie.  
+**Cel:** Opanować ownership, lifetimes i generyki przez ból implementacji, nie przez czytanie.
 **Czas:** 2–3 tygodnie
 
 ---
@@ -102,7 +102,7 @@
 
 ## MODUŁ 2 — Deep Learning: gra z botem
 
-**Cel:** Zrozumieć jak działa uczenie maszynowe od środka, nauczyć się traits/enums/Rc w realnym projekcie, dotknąć multithreadingu.  
+**Cel:** Zrozumieć jak działa uczenie maszynowe od środka, nauczyć się traits/enums/Rc w realnym projekcie, dotknąć multithreadingu.
 **Czas:** 3–4 tygodnie
 
 ---
@@ -218,7 +218,7 @@
 
 ## MODUŁ 3 — HTTP Serwer od zera
 
-**Cel:** Zrozumieć jak działa sieć, HTTP, bazy danych — rzeczy których Python ukrywa za FastAPI/SQLAlchemy.  
+**Cel:** Zrozumieć jak działa sieć, HTTP, bazy danych — rzeczy których Python ukrywa za FastAPI/SQLAlchemy.
 **Czas:** 3–4 tygodnie
 
 ---
@@ -293,11 +293,11 @@
 
 - Połącz router z modułu 2 z sqlx z modułu 3
 - Zaimplementuj pełny CRUD dla `users`:
-  - `GET /users` — lista użytkowników z paginacją
-  - `GET /users/:id` — jeden użytkownik lub 404
-  - `POST /users` — stwórz użytkownika, walidacja emaila
-  - `PUT /users/:id` — update
-  - `DELETE /users/:id` — usuń
+    - `GET /users` — lista użytkowników z paginacją
+    - `GET /users/:id` — jeden użytkownik lub 404
+    - `POST /users` — stwórz użytkownika, walidacja emaila
+    - `PUT /users/:id` — update
+    - `DELETE /users/:id` — usuń
 - Obsługa błędów: własny typ `AppError` implementujący konwersję na HTTP response
 
 ---
@@ -352,14 +352,17 @@ Po ukończeniu tych trzech modułów masz solidne podstawy. Naturalne kierunki:
 ## Zasoby na każdy moduł
 
 **Moduł 1:**
+
 - "Learn Rust With Entirely Too Many Linked Lists" — https://rust-unofficial.github.io/too-many-lists/
 - `cargo test` dokumentacja — https://doc.rust-lang.org/book/ch11-00-testing.html
 
 **Moduł 2:**
+
 - Dokumentacja cratea `burn` — https://burn.dev
 - Wikipedia: Monte Carlo Tree Search — matematyczne podstawy UCB1
 
 **Moduł 3:**
+
 - Rozdział 20 Rust Book (HTTP serwer) — przeczytaj po własnej implementacji, nie przed
 - Dokumentacja `sqlx` — https://docs.rs/sqlx
 - Dokumentacja `serde` — https://serde.rs
@@ -367,5 +370,5 @@ Po ukończeniu tych trzech modułów masz solidne podstawy. Naturalne kierunki:
 
 ---
 
-*Szacowany czas: moduł 1 = 2-3 tygodnie, moduł 2 = 3-4 tygodnie, moduł 3 = 3-4 tygodnie*  
-*Razem: 8-11 tygodni przy ~2-3 godzinach dziennie*
+_Szacowany czas: moduł 1 = 2-3 tygodnie, moduł 2 = 3-4 tygodnie, moduł 3 = 3-4 tygodnie_
+_Razem: 8-11 tygodni przy ~2-3 godzinach dziennie_

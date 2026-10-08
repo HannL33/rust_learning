@@ -1,5 +1,14 @@
 use crate::tic_tac_engine as tte;
 
+/// A selected move and the number of search nodes visited while choosing it.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub struct SearchResult {
+    pub position: Option<usize>,
+    /// Includes terminal nodes in candidate subtrees, but not the root board.
+    /// Zero when the game has already ended.
+    pub visited_nodes: usize,
+}
+
 /// Searches to the end of the game and scores the position from `bot`'s perspective.
 /// `is_maximizing` is true on the bot's turn and false on the opponent's turn.
 /// `count` counts visited nodes, including terminal positions.
@@ -80,8 +89,14 @@ pub fn minimax_alpha_beta(
 /// Returns an optimal move, or `None` if the game has already ended.
 /// The board must be a legal position with `player` on turn.
 pub fn best_move(board: tte::Board, player: tte::Player) -> Option<usize> {
+    best_move_with_stats(board, player).position
+}
+
+/// Selects an optimal move using minimax and returns search statistics.
+/// The board must be a legal position with `player` on turn.
+pub fn best_move_with_stats(board: tte::Board, player: tte::Player) -> SearchResult {
     if tte::check_winner(&board) != tte::GameResult::InProgress {
-        return None;
+        return SearchResult::default();
     }
     let mut best = i32::MIN;
     let mut chosen = None;
@@ -100,15 +115,23 @@ pub fn best_move(board: tte::Board, player: tte::Player) -> Option<usize> {
             }
         }
     }
-    println!("Analyzed: {} positions in best_move.", count);
-    chosen
+    SearchResult {
+        position: chosen,
+        visited_nodes: count,
+    }
 }
 
 /// Returns an optimal move using alpha-beta pruning, or `None` after the game ends.
 /// The board must be a legal position with `player` on turn.
 pub fn best_move_alpha_beta(board: tte::Board, player: tte::Player) -> Option<usize> {
+    best_move_alpha_beta_with_stats(board, player).position
+}
+
+/// Selects an optimal move using alpha-beta pruning and returns search statistics.
+/// The board must be a legal position with `player` on turn.
+pub fn best_move_alpha_beta_with_stats(board: tte::Board, player: tte::Player) -> SearchResult {
     if tte::check_winner(&board) != tte::GameResult::InProgress {
-        return None;
+        return SearchResult::default();
     }
     let mut best = i32::MIN;
     let mut chosen = None;
@@ -133,8 +156,10 @@ pub fn best_move_alpha_beta(board: tte::Board, player: tte::Player) -> Option<us
             }
         }
     }
-    println!("Analyzed: {} positions in best_move_alpha_beta.", count);
-    chosen
+    SearchResult {
+        position: chosen,
+        visited_nodes: count,
+    }
 }
 
 /// Test written by AI
@@ -192,7 +217,22 @@ mod tests {
                 for find_move in MOVE_FINDERS {
                     assert_eq!(find_move(*game.board(), player), None);
                 }
+                for search in [best_move_with_stats, best_move_alpha_beta_with_stats] {
+                    let result = search(*game.board(), player);
+                    assert_eq!(result.position, None);
+                    assert_eq!(result.visited_nodes, 0);
+                }
             }
+        }
+    }
+
+    #[test]
+    fn move_search_statistics_include_the_only_terminal_child() {
+        let game = game_after(&[0, 1, 2, 4, 3, 5, 7, 6]);
+        for search in [best_move_with_stats, best_move_alpha_beta_with_stats] {
+            let result = search(*game.board(), game.turn());
+            assert_eq!(result.position, Some(8));
+            assert_eq!(result.visited_nodes, 1);
         }
     }
 

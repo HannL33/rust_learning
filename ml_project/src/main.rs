@@ -42,7 +42,12 @@ impl MyApp {
         let mut clicked = None;
         let spacing = 8.0;
         let cell = ((ui.available_width() - 2.0 * spacing) / 3.0).clamp(48.0, 140.0);
-        let enabled = self.game.result() == tte::GameResult::InProgress;
+        let enabled = self.game.result() == tte::GameResult::InProgress
+            && match self.mode {
+                Mode::ManVsMan => true,
+                Mode::ManVsMachine => self.game.turn() == self.human_player,
+                Mode::MachineVsMachine => false,
+            };
 
         ui.vertical_centered(|ui| {
             eframe::egui::Grid::new("board")
@@ -73,7 +78,10 @@ impl MyApp {
                         .fill(fill)
                         .stroke(stroke);
 
-                        if ui.add_enabled(enabled, btn).clicked() {
+                        if ui
+                            .add_enabled(enabled && elem == tte::Cell::Empty, btn)
+                            .clicked()
+                        {
                             clicked = Some(idx);
                         }
                         if (idx + 1) % 3 == 0 {
@@ -106,6 +114,7 @@ impl eframe::App for MyApp {
                 if ui
                     .selectable_label(self.mode == Mode::ManVsMan, "ManVsMan")
                     .clicked()
+                    && self.mode != Mode::ManVsMan
                 {
                     self.mode = Mode::ManVsMan;
                     self.game = tte::Game::new();
@@ -113,6 +122,7 @@ impl eframe::App for MyApp {
                 if ui
                     .selectable_label(self.mode == Mode::ManVsMachine, "ManVsMachine")
                     .clicked()
+                    && self.mode != Mode::ManVsMachine
                 {
                     self.mode = Mode::ManVsMachine;
                     self.game = tte::Game::new();
@@ -120,6 +130,7 @@ impl eframe::App for MyApp {
                 if ui
                     .selectable_label(self.mode == Mode::MachineVsMachine, "MachineVsMachine")
                     .clicked()
+                    && self.mode != Mode::MachineVsMachine
                 {
                     self.mode = Mode::MachineVsMachine;
                     self.game = tte::Game::new();
@@ -129,12 +140,13 @@ impl eframe::App for MyApp {
                 Mode::ManVsMan => {
                     if let Some(clicked_idx) = self.board_ui(ui) {
                         match self.game.play(clicked_idx) {
-                            Ok(_) => {}
+                            Ok(_) => ui.ctx().request_repaint(),
                             Err(error) => println!("Error: {:?}", error),
                         }
                     }
                 }
                 Mode::ManVsMachine => {
+                    let previous_player = self.human_player;
                     egui::ComboBox::from_label("Which side you wanna choose?")
                         .selected_text(format!("{:?}", self.human_player))
                         .show_ui(ui, |ui| {
@@ -142,11 +154,15 @@ impl eframe::App for MyApp {
                             ui.selectable_value(&mut self.human_player, tte::Player::O, "O");
                         });
 
+                    if self.human_player != previous_player {
+                        self.game = tte::Game::new();
+                    }
+
                     if let Some(clicked_idx) = self.board_ui(ui)
                         && self.game.turn() == self.human_player
                     {
                         match self.game.play(clicked_idx) {
-                            Ok(_) => {}
+                            Ok(_) => ui.ctx().request_repaint(),
                             Err(error) => println!("Error: {:?}", error),
                         }
                     }
@@ -158,7 +174,7 @@ impl eframe::App for MyApp {
                         )
                     {
                         match self.game.play(best_move_machine) {
-                            Ok(_) => {}
+                            Ok(_) => ui.ctx().request_repaint(),
                             Err(error) => println!("Error: {:?}", error),
                         }
                     }
@@ -175,6 +191,7 @@ impl eframe::App for MyApp {
                 |ui| {
                     if ui.button("New Game").clicked() {
                         self.game = tte::Game::new();
+                        ui.ctx().request_repaint();
                     }
                 },
             );

@@ -53,6 +53,14 @@ fn main() -> Result<(), tte::MoveError> {
         assert_eq!(plain, expected, "minimax: {name}");
         assert_eq!(pruned, expected, "alpha-beta: {name}");
         assert!(pruned_count <= plain_count, "{name}");
+        let selected = ttb::best_move_alpha_beta_with_stats(board, bot);
+        let position = selected.position.expect("each case must have a legal move");
+        let next = tte::apply_move(board, position, bot)?;
+        let mut verification_count = 0;
+        assert_eq!(
+            ttb::minimax(next, false, bot, &mut verification_count),
+            expected
+        );
         results.push((
             name,
             bot,
@@ -61,13 +69,15 @@ fn main() -> Result<(), tte::MoveError> {
             pruned,
             plain_count,
             pruned_count,
+            selected,
         ));
     }
 
     println!("\n--- Minimax comparison (bot's perspective) ---");
-    for (name, bot, expected, plain, pruned, plain_count, pruned_count) in results {
+    for (name, bot, expected, plain, pruned, plain_count, pruned_count, selected) in results {
         println!(
-            "{name} | bot: {bot:?} | expected: {expected} | minimax: {plain} ({plain_count} nodes) | alpha-beta: {pruned} ({pruned_count} nodes)"
+            "{name} | bot: {bot:?} | expected: {expected} | minimax: {plain} ({plain_count} nodes) | alpha-beta: {pruned} ({pruned_count} nodes) | selected move: {:?} ({} nodes)",
+            selected.position, selected.visited_nodes
         );
     }
     Ok(())
