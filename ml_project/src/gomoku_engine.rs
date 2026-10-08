@@ -24,9 +24,10 @@ pub enum GameResult {
 pub enum MoveError {
     CoorErr(String),
     TakenErr(String),
+    FinishedGameErr(String),
 }
 
-/// Board object is responsible only for 'board'\
+/// Board object is responsible only for 'board'
 /// so applying moves (changing state), checking consistency, correctness etc
 /// Knows nothing about the game, turns, bots etc
 #[derive(Copy, Clone, Debug)]
@@ -106,8 +107,63 @@ impl Board {
         }
         GameResult::Draw
     }
-    pub fn board(&self) -> [[Cell; BOARD_SIZE]; BOARD_SIZE] {
-        self.board
+    pub fn board(&self) -> &[[Cell; BOARD_SIZE]; BOARD_SIZE] {
+        &self.board
+    }
+
+    pub fn available_empty_moves(&self) -> Vec<(usize, usize)> {
+        let mut av_moves = Vec::new();
+        for (r_idx, row) in self.board.iter().enumerate() {
+            for (c_idx, cell) in row.iter().enumerate() {
+                if *cell == Cell::Empty {
+                    av_moves.push((r_idx, c_idx));
+                }
+            }
+        }
+        av_moves
+    }
+}
+
+pub struct Game {
+    board: Board,
+    current_turn: Player,
+    result: GameResult,
+}
+
+impl Game {
+    pub fn new() -> Self {
+        Game {
+            board: Board::new(),
+            current_turn: Player::X,
+            result: GameResult::InProgress,
+        }
+    }
+    pub fn play(&mut self, position: (usize, usize)) -> Result<(), MoveError> {
+        if self.result != GameResult::InProgress {
+            return Err(MoveError::FinishedGameErr(
+                "Cannot play the game as it is over already!".to_string(),
+            ));
+        }
+        match self.board.apply_move_inplace(position, self.current_turn) {
+            Ok(_) => {
+                match self.current_turn {
+                    Player::Y => self.current_turn = Player::X,
+                    Player::X => self.current_turn = Player::Y,
+                };
+                self.result = self.board.check_result();
+                Ok(())
+            }
+            Err(error) => Err(error),
+        }
+    }
+    pub fn board(&self) -> &Board {
+        &self.board
+    }
+    pub fn turn(&self) -> Player {
+        self.current_turn
+    }
+    pub fn result(&self) -> GameResult {
+        self.result
     }
 }
 
@@ -373,7 +429,7 @@ mod tests {
     fn out_of_bounds_moves_return_coordinate_errors_without_mutating() {
         let mut board = Board::new();
         place(&mut board, (2, 3), Player::X);
-        let before = board.board();
+        let before = *board.board();
         for coor in [
             (BOARD_SIZE, 0),
             (0, BOARD_SIZE),
@@ -385,12 +441,12 @@ mod tests {
                 board.apply_move_inplace(coor, Player::Y),
                 Err(MoveError::CoorErr(_))
             ));
-            assert_eq!(board.board(), before);
+            assert_eq!(*board.board(), before);
             assert!(matches!(
                 board.apply_move(coor, Player::Y),
                 Err(MoveError::CoorErr(_))
             ));
-            assert_eq!(board.board(), before);
+            assert_eq!(*board.board(), before);
         }
     }
 
@@ -398,18 +454,18 @@ mod tests {
     fn occupied_cell_rejects_both_players_without_mutating() {
         let mut board = Board::new();
         place(&mut board, (2, 3), Player::X);
-        let before = board.board();
+        let before = *board.board();
         for player in [Player::X, Player::Y] {
             assert!(matches!(
                 board.apply_move_inplace((2, 3), player),
                 Err(MoveError::TakenErr(_))
             ));
-            assert_eq!(board.board(), before);
+            assert_eq!(*board.board(), before);
             assert!(matches!(
                 board.apply_move((2, 3), player),
                 Err(MoveError::TakenErr(_))
             ));
-            assert_eq!(board.board(), before);
+            assert_eq!(*board.board(), before);
         }
     }
 
@@ -417,14 +473,197 @@ mod tests {
     fn apply_move_returns_a_new_board_and_preserves_the_original() {
         let mut original = Board::new();
         place(&mut original, (0, 0), Player::X);
-        let before = original.board();
+        let before = *original.board();
         let updated = match original.apply_move((14, 14), Player::Y) {
             Ok(board) => board,
             Err(_) => panic!("valid move must succeed"),
         };
         let mut expected = before;
         expected[14][14] = Cell::Taken(Player::Y);
-        assert_eq!(updated.board(), expected);
-        assert_eq!(original.board(), before);
+        assert_eq!(*updated.board(), expected);
+        assert_eq!(*original.board(), before);
+    }
+
+    fn winning_game(winner: Player) -> Game {
+        let mut game = Game::new();
+        // X's spare opening is isolated; the opponent's stones have gaps.
+        if winner == Player::Y {
+            assert!(game.play((14, 14)).is_ok());
+        }
+        for col in 0..5 {
+            assert_eq!(game.turn(), winner);
+            assert!(game.play((0, col)).is_ok());
+            if col < 4 {
+                assert_eq!(game.result(), GameResult::InProgress);
+                assert!(game.play((2, col * 2)).is_ok());
+                assert_eq!(game.result(), GameResult::InProgress);
+            }
+        }
+        game
+    }
+
+    #[test]
+    fn new_game_starts_with_x_on_an_empty_board() {
+        let game = Game::new();
+        assert_eq!(game.turn(), Player::X);
+        assert_eq!(game.result(), GameResult::InProgress);
+        assert!(
+            game.board()
+                .board()
+                .iter()
+                .flatten()
+                .all(|cell| *cell == Cell::Empty)
+        );
+    }
+
+    #[test]
+    fn game_play_places_the_current_players_stone_and_alternates_turns() {
+        let mut game = Game::new();
+        for (position, player, next) in [
+            ((0, 0), Player::X, Player::Y),
+            ((7, 7), Player::Y, Player::X),
+            ((14, 14), Player::X, Player::Y),
+            ((0, 14), Player::Y, Player::X),
+        ] {
+            let mut expected = *game.board().board();
+            expected[position.0][position.1] = Cell::Taken(player);
+            assert!(game.play(position).is_ok());
+            assert_eq!(*game.board().board(), expected);
+            assert_eq!(game.turn(), next);
+            assert_eq!(game.result(), GameResult::InProgress);
+        }
+    }
+
+    #[test]
+    fn game_rejected_moves_preserve_board_turn_and_result() {
+        let mut game = Game::new();
+        assert!(game.play((2, 3)).is_ok());
+        let before = *game.board().board();
+        let turn = game.turn();
+        let result = game.result();
+        assert!(matches!(game.play((2, 3)), Err(MoveError::TakenErr(_))));
+        assert_eq!(*game.board().board(), before);
+        assert_eq!(game.turn(), turn);
+        assert_eq!(game.result(), result);
+        for position in [(BOARD_SIZE, 0), (0, BOARD_SIZE), (usize::MAX, usize::MAX)] {
+            assert!(matches!(game.play(position), Err(MoveError::CoorErr(_))));
+            assert_eq!(*game.board().board(), before);
+            assert_eq!(game.turn(), turn);
+            assert_eq!(game.result(), result);
+        }
+        // The failed attempts must not consume Y's turn.
+        assert!(game.play((2, 4)).is_ok());
+        assert_eq!(game.board().board()[2][4], Cell::Taken(Player::Y));
+        assert_eq!(game.turn(), Player::X);
+    }
+
+    #[test]
+    fn game_records_a_win_for_either_player() {
+        for player in [Player::X, Player::Y] {
+            assert_eq!(winning_game(player).result(), GameResult::Win(player));
+        }
+    }
+
+    #[test]
+    fn game_rejects_further_moves_after_either_players_win() {
+        for player in [Player::X, Player::Y] {
+            let mut game = winning_game(player);
+            let before = *game.board().board();
+            let turn = game.turn();
+            for position in [(7, 7), (0, 0), (usize::MAX, 0)] {
+                assert!(matches!(
+                    game.play(position),
+                    Err(MoveError::FinishedGameErr(_))
+                ));
+                assert_eq!(*game.board().board(), before);
+                assert_eq!(game.turn(), turn);
+                assert_eq!(game.result(), GameResult::Win(player));
+            }
+        }
+    }
+
+    #[test]
+    fn game_reaches_a_draw_through_alternating_moves_and_rejects_further_play() {
+        let target = full_draw_board();
+        let mut x_moves = Vec::new();
+        let mut y_moves = Vec::new();
+        for row in 0..BOARD_SIZE {
+            for col in 0..BOARD_SIZE {
+                match target.board()[row][col] {
+                    Cell::Taken(Player::X) => x_moves.push((row, col)),
+                    Cell::Taken(Player::Y) => y_moves.push((row, col)),
+                    Cell::Empty => panic!("draw fixture must be full"),
+                }
+            }
+        }
+        assert_eq!(x_moves.len(), y_moves.len() + 1);
+        let mut x_moves = x_moves.into_iter();
+        let mut y_moves = y_moves.into_iter();
+        let mut game = Game::new();
+        for move_index in 0..BOARD_SIZE * BOARD_SIZE {
+            assert_eq!(game.result(), GameResult::InProgress);
+            let position = match game.turn() {
+                Player::X => x_moves.next(),
+                Player::Y => y_moves.next(),
+            }
+            .expect("each turn must have a remaining target cell");
+            assert!(game.play(position).is_ok());
+            if move_index + 1 < BOARD_SIZE * BOARD_SIZE {
+                assert_eq!(game.result(), GameResult::InProgress);
+            }
+        }
+        assert_eq!(game.board().board(), target.board());
+        assert_eq!(game.result(), GameResult::Draw);
+        let before = *game.board().board();
+        let turn = game.turn();
+        assert!(matches!(
+            game.play((0, 0)),
+            Err(MoveError::FinishedGameErr(_))
+        ));
+        assert_eq!(*game.board().board(), before);
+        assert_eq!(game.turn(), turn);
+        assert_eq!(game.result(), GameResult::Draw);
+    }
+
+    #[test]
+    fn available_empty_moves_contains_every_coordinate_once_on_a_new_board() {
+        let moves = Board::new().available_empty_moves();
+        let unique: std::collections::HashSet<_> = moves.iter().copied().collect();
+        assert_eq!(moves.len(), BOARD_SIZE * BOARD_SIZE);
+        assert_eq!(unique.len(), moves.len());
+        for row in 0..BOARD_SIZE {
+            for col in 0..BOARD_SIZE {
+                assert!(unique.contains(&(row, col)));
+            }
+        }
+    }
+
+    #[test]
+    fn available_empty_moves_excludes_occupied_cells_and_contains_only_playable_cells() {
+        let mut board = Board::new();
+        for (position, player) in [
+            ((0, 0), Player::X),
+            ((7, 7), Player::Y),
+            ((14, 14), Player::X),
+        ] {
+            place(&mut board, position, player);
+        }
+        let before = *board.board();
+        let moves = board.available_empty_moves();
+        let unique: std::collections::HashSet<_> = moves.iter().copied().collect();
+        assert_eq!(moves.len(), BOARD_SIZE * BOARD_SIZE - 3);
+        assert_eq!(unique.len(), moves.len());
+        for position in [(0, 0), (7, 7), (14, 14)] {
+            assert!(!unique.contains(&position));
+        }
+        for position in moves {
+            assert!(board.apply_move(position, Player::Y).is_ok());
+        }
+        assert_eq!(*board.board(), before);
+    }
+
+    #[test]
+    fn available_empty_moves_is_empty_on_a_full_board() {
+        assert!(full_draw_board().available_empty_moves().is_empty());
     }
 }
