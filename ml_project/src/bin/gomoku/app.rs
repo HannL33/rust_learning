@@ -9,7 +9,7 @@ const STATUS_BACKGROUND: Color32 = Color32::from_rgb(242, 246, 237);
 const WOOD: Color32 = Color32::from_rgb(218, 181, 126);
 const GRID: Color32 = Color32::from_rgb(114, 83, 48);
 
-pub(super) fn configure_style(ctx: &egui::Context) {
+pub fn configure_style(ctx: &egui::Context) {
     // Keep the palette consistent even when the system uses a different theme.
     ctx.set_theme(egui::Theme::Light);
     let mut visuals = egui::Visuals::light();
