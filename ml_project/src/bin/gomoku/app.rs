@@ -39,15 +39,62 @@ pub fn configure_style(ctx: &egui::Context) {
     });
 }
 
-#[derive(Default)]
-pub(super) struct GomokuApp {
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum Mode {
+    #[default]
+    ManVsMan,
+    ManVsMachine,
+    MachineVsMachine,
+}
+
+impl Mode {
+    const ALL: [Self; 3] = [Self::ManVsMan, Self::ManVsMachine, Self::MachineVsMachine];
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::ManVsMan => "Man vs Man",
+            Self::ManVsMachine => "Man vs Machine",
+            Self::MachineVsMachine => "Machine vs Machine",
+        }
+    }
+}
+
+pub struct GomokuApp {
     game: Game,
-    // History is UI state. Undo rebuilds the game through the engine's public API.
+    mode: Mode,
+    human_player: Player,
     moves: Vec<(usize, usize)>,
     error: Option<String>,
 }
 
+impl Default for GomokuApp {
+    fn default() -> Self {
+        Self {
+            game: Game::new(),
+            mode: Mode::default(),
+            human_player: Player::X,
+            moves: Vec::new(),
+            error: None,
+        }
+    }
+}
+
 impl GomokuApp {
+    fn new_game(&mut self) {
+        self.game = Game::new();
+        self.moves.clear();
+        self.error = None;
+    }
+
+    fn human_can_play(&self) -> bool {
+        self.game.result() == GameResult::InProgress
+            && match self.mode {
+                Mode::ManVsMan => true,
+                Mode::ManVsMachine => self.game.turn() == self.human_player,
+                Mode::MachineVsMachine => false,
+            }
+    }
+
     fn play(&mut self, position: (usize, usize)) {
         match self.game.play(position) {
             Ok(()) => {
@@ -65,21 +112,24 @@ impl GomokuApp {
         let mut restored = Game::new();
         for &position in &self.moves[..remaining] {
             if let Err(error) = restored.play(position) {
-                self.error = Some(format!("Nie udało się cofnąć ruchu: {error}"));
+                self.error = Some(format!("Could not undo the move: {error}"));
                 return;
             }
         }
-        // Commit only after the entire history has been replayed successfully.
         self.game = restored;
         self.moves.pop();
         self.error = None;
     }
 
+    fn bot_move(&self) -> Option<(usize, usize)> {
+        None
+    }
+
     fn status(&self) -> String {
         match self.game.result() {
-            GameResult::InProgress => format!("Ruch: {}", player_name(self.game.turn())),
-            GameResult::Win(player) => format!("Wygrywa {}!", player_name(player)),
-            GameResult::Draw => "Remis — plansza jest pełna".into(),
+            GameResult::InProgress => format!("Turn: {}", player_name(self.game.turn())),
+            GameResult::Win(player) => format!("{} wins!", player_name(player)),
+            GameResult::Draw => "Draw — the board is full".into(),
         }
     }
 
@@ -87,14 +137,11 @@ impl GomokuApp {
         ui.horizontal(|ui| {
             ui.heading(RichText::new("GOMOKU").size(32.0).strong().color(TEXT));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(
-                    RichText::new("15 × 15  /  DWÓCH GRACZY")
-                        .color(MUTED)
-                        .size(13.0),
-                );
+                ui.label(RichText::new("15 × 15 BOARD").color(MUTED).size(13.0));
             });
         });
-        ui.label(RichText::new("Pięć kamieni w linii. Jeden ruch bliżej zwycięstwa.").color(MUTED));
+        ui.label(RichText::new("Five stones in a row. One move closer to victory.").color(MUTED));
+        self.mode_ui(ui);
         ui.add_space(8.0);
 
         egui::Frame::new()
@@ -120,12 +167,21 @@ impl GomokuApp {
                 });
                 ui.label(
                     RichText::new(format!(
-                        "Czarne (X) zaczynają  ·  Białe (O) grają drugie  ·  Ruchy: {}",
+                        "Black (X) plays first  ·  White (O) plays second  ·  Moves: {}",
                         self.moves.len()
                     ))
                     .color(MUTED)
                     .size(15.0),
                 );
+                if self.mode != Mode::ManVsMan {
+                    ui.label(
+                        RichText::new(
+                            "No bot connected yet. This mode is ready for a bot to be added.",
+                        )
+                        .color(TEXT)
+                        .size(16.0),
+                    );
+                }
             });
         ui.add_space(8.0);
 
@@ -143,26 +199,52 @@ impl GomokuApp {
         ui.add_space(8.0);
         ui.horizontal(|ui| {
             if ui
-                .add_enabled(!self.moves.is_empty(), egui::Button::new("Cofnij ruch"))
+                .add_enabled(!self.moves.is_empty(), egui::Button::new("Undo move"))
                 .clicked()
             {
                 self.undo();
             }
-            if ui.button("Nowa gra").clicked() {
-                *self = Self::default();
+            if ui.button("New game").clicked() {
+                self.new_game();
             }
             if let Some(&(row, column)) = self.moves.last() {
                 ui.label(
-                    RichText::new(format!("Ostatni ruch: {}{}", column_label(column), row + 1))
+                    RichText::new(format!("Last move: {}{}", column_label(column), row + 1))
                         .color(MUTED),
                 );
             }
         });
         ui.label(RichText::new(
-            "Kliknij przecięcie linii. Wygrywa co najmniej 5 kamieni poziomo, pionowo lub po przekątnej."
+            "Click an intersection. Five or more stones in a row win horizontally, vertically or diagonally."
         ).color(MUTED).size(15.0));
-        if let Some(error) = &self.error {
+        if let Some(error) = self.error.as_deref() {
             ui.colored_label(Color32::from_rgb(160, 35, 35), error);
+        }
+    }
+
+    fn mode_ui(&mut self, ui: &mut egui::Ui) {
+        let mut mode = self.mode;
+        ui.horizontal_wrapped(|ui| {
+            for option in Mode::ALL {
+                ui.selectable_value(&mut mode, option, option.label());
+            }
+        });
+        if self.mode != mode {
+            self.mode = mode;
+            self.new_game();
+        }
+
+        if mode == Mode::ManVsMachine {
+            let mut player = self.human_player;
+            ui.horizontal_wrapped(|ui| {
+                ui.label("Your stones:");
+                ui.selectable_value(&mut player, Player::X, "Black (X)");
+                ui.selectable_value(&mut player, Player::O, "White (O)");
+            });
+            if self.human_player != player {
+                self.human_player = player;
+                self.new_game();
+            }
         }
     }
 
@@ -229,7 +311,7 @@ impl GomokuApp {
         }
 
         let hovered = response.hover_pos().and_then(|pos| geometry.position(pos));
-        if self.game.result() == GameResult::InProgress
+        if self.human_can_play()
             && let Some((row, column)) = hovered
             && self.game.board().cells()[row][column] == Cell::Empty
         {
@@ -257,13 +339,21 @@ impl eframe::App for GomokuApp {
                 let viewport_bottom = ui.max_rect().bottom();
                 egui::ScrollArea::vertical().show(ui, |ui| self.show(ui, viewport_bottom));
             });
+        if self.game.result() == GameResult::InProgress
+            && !self.human_can_play()
+            && self.error.is_none()
+            && let Some(position) = self.bot_move()
+        {
+            self.play(position);
+            ui.ctx().request_repaint();
+        }
     }
 }
 
 fn player_name(player: Player) -> &'static str {
     match player {
-        Player::X => "Czarne (X)",
-        Player::O => "Białe (O)",
+        Player::X => "Black (X)",
+        Player::O => "White (O)",
     }
 }
 
