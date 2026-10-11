@@ -158,6 +158,9 @@ impl Board {
         }
         av_moves
     }
+    pub fn size(&self) -> usize {
+        self.cells().len()
+    }
 }
 
 /// Enforces alternating turns, legal moves and the end of a Gomoku game.
