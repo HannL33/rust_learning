@@ -122,7 +122,7 @@ impl GomokuApp {
     }
 
     fn bot_move(&self) -> Option<(usize, usize)> {
-        None
+        ml_project::gomoku_bot::best_move_alpha_beta(*self.game.board(), self.game.turn(), 3)
     }
 
     fn status(&self) -> String {

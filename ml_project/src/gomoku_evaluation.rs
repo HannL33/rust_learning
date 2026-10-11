@@ -68,7 +68,7 @@ fn check_exactly_n_stones(
     }
     let mut result: Vec<StonesFollowingLayout> = Vec::new();
     for (r_idx, row) in board.cells().iter().enumerate() {
-        for (c_idx, cell) in row.iter().enumerate() {
+        for (c_idx, _) in row.iter().enumerate() {
             // check horizontals
             if c_idx + n_stones <= board.size()
                 && row[c_idx..c_idx + n_stones]
@@ -953,8 +953,7 @@ mod tests {
 
     #[test]
     fn full_width_run_has_two_closed_ends() {
-        let mut board = ge::Board::new();
-        let coordinates = place_run(&mut board, (7, 0), (0, 1), ge::BOARD_SIZE, ge::Player::X);
+        let board = ge::Board::new();
 
         // we will not consider configurations with 15 followin stones!
         assert_runs(&board, ge::Player::X, ge::BOARD_SIZE, vec![]);
