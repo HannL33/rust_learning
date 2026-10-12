@@ -15,7 +15,7 @@ pub fn minimax(board: ge::Board, is_maximizing: bool, bot: ge::Player, depth: us
             let player = if is_maximizing { bot } else { bot.opposite() };
             let mut best = if is_maximizing { i32::MIN } else { i32::MAX };
             if depth == 0 {
-                evaluate(&board, bot)
+                evaluate(&board, bot) as i32
             } else {
                 for coor in board.available_empty_moves() {
                     let new_board = board
@@ -54,9 +54,17 @@ pub fn minimax_alpha_beta(
             let player = if is_maximizing { bot } else { bot.opposite() };
             let mut best = if is_maximizing { i32::MIN } else { i32::MAX };
             if depth == 0 {
-                evaluate(&board, bot)
+                evaluate(&board, bot) as i32
             } else {
-                for coor in board.available_empty_moves() {
+                let center = board.size() / 2;
+                let mut moves = board.available_empty_moves_close(2);
+                moves.sort_by_key(|(row, col)| row.abs_diff(center) + col.abs_diff(center));
+                if moves.is_empty() {
+                    return evaluate(&board, bot) as i32;
+                }
+
+                for coor in moves {
+                    // 2 is for now hyperparameter
                     let new_board = board
                         .apply_move(coor, player)
                         .expect("Expect the best right now!");
@@ -92,6 +100,7 @@ pub fn best_move_alpha_beta(
     }
     assert!(depth > 0, "Search depth must be at least 1");
 
+    let center = board.size() / 2;
     let mut best = i32::MIN;
     let mut chosen = None;
     let mut alpha = i32::MIN;
@@ -104,7 +113,11 @@ pub fn best_move_alpha_beta(
     {
         return Some((board.size() / 2, board.size() / 2));
     }
-    for coor in board.available_empty_moves() {
+    let mut moves = board.available_empty_moves_close(2);
+
+    moves.sort_by_key(|&(row, col)| row.abs_diff(center) + col.abs_diff(center));
+
+    for coor in moves {
         let new_board = board.apply_move(coor, player).expect("Expect the best");
         let score = minimax_alpha_beta(new_board, false, player, depth - 1, alpha, beta);
         if score > best {

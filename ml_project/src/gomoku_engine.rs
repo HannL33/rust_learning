@@ -1,5 +1,8 @@
+use itertools::Itertools;
 /// Number of rows and columns on the Gomoku board.
 pub const BOARD_SIZE: usize = 15;
+
+pub type Position = (usize, usize);
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Player {
@@ -157,6 +160,35 @@ impl Board {
             }
         }
         av_moves
+    }
+    pub fn available_empty_moves_close(&self, range: usize) -> Vec<Position> {
+        let mut av_moves_close = Vec::new();
+        for position in self.available_empty_moves() {
+            if self.is_position_near_other_stones(position, range) {
+                av_moves_close.push(position);
+            }
+        }
+        av_moves_close
+    }
+    fn is_position_near_other_stones(&self, position: Position, range: usize) -> bool {
+        let constraint = self.size() as i32 - 1;
+        let r = range.min(constraint as usize) as i32;
+
+        for (dx, dy) in (-r..=r).cartesian_product(-r..=r) {
+            if dx == 0 && dy == 0 {
+                continue;
+            }
+
+            let x = position.0 as i32 + dx;
+            let y = position.1 as i32 + dy;
+
+            if (0..=constraint).contains(&x) && (0..=constraint).contains(&y) {
+                if self.board[x as usize][y as usize] != Cell::Empty {
+                    return true;
+                }
+            }
+        }
+        false
     }
     pub fn size(&self) -> usize {
         self.cells().len()
@@ -744,5 +776,102 @@ mod tests {
     #[test]
     fn available_empty_moves_is_empty_on_a_full_board() {
         assert!(full_draw_board().available_empty_moves().is_empty());
+    }
+
+    #[test]
+    fn close_moves_match_square_radius_at_center_edges_and_corners() {
+        for stone in [(7, 7), (0, 7), (0, 0), (14, 14), (14, 7)] {
+            let mut board = Board::new();
+            place(&mut board, stone, Player::X);
+            for radius in [1, 2, BOARD_SIZE - 1, usize::MAX] {
+                // Independent expectation: distance across the whole board,
+                // rather than scanning a neighborhood around each candidate.
+                let expected: Vec<_> = board
+                    .available_empty_moves()
+                    .into_iter()
+                    .filter(|&(row, col)| {
+                        row.abs_diff(stone.0).max(col.abs_diff(stone.1)) <= radius
+                    })
+                    .collect();
+                assert_eq!(
+                    board.available_empty_moves_close(radius),
+                    expected,
+                    "stone {stone:?}, radius {radius}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn close_moves_include_both_players_without_duplicates_or_occupied_cells() {
+        let mut board = Board::new();
+        place(&mut board, (7, 7), Player::X);
+        place(&mut board, (7, 9), Player::O);
+        let before = *board.cells();
+        let moves = board.available_empty_moves_close(2);
+        let unique: std::collections::HashSet<_> = moves.iter().copied().collect();
+        // Union of the overlapping 5x5 squares is 5x7, minus two occupied cells.
+        assert_eq!(moves.len(), 33);
+        assert_eq!(unique.len(), moves.len());
+        assert!(unique.contains(&(7, 5))); // Close only to X.
+        assert!(unique.contains(&(7, 11))); // Close only to O.
+        assert!(!unique.contains(&(7, 7)));
+        assert!(!unique.contains(&(7, 9)));
+        assert!(!unique.contains(&(7, 12)));
+        for position in moves {
+            assert!(board.apply_move(position, Player::X).is_ok());
+        }
+        assert_eq!(*board.cells(), before);
+    }
+
+    #[test]
+    fn close_moves_are_empty_without_stones_or_without_empty_cells() {
+        for radius in [0, 1, 2, usize::MAX] {
+            assert!(Board::new().available_empty_moves_close(radius).is_empty());
+            assert!(
+                full_draw_board()
+                    .available_empty_moves_close(radius)
+                    .is_empty()
+            );
+        }
+    }
+
+    #[test]
+    fn zero_radius_has_no_empty_candidates_even_with_existing_stones() {
+        let mut board = Board::new();
+        place(&mut board, (7, 7), Player::O);
+        assert!(board.available_empty_moves_close(0).is_empty());
+    }
+
+    #[test]
+    fn close_moves_preserve_immediate_winning_and_defensive_squares() {
+        let mut board = Board::new();
+        for col in 0..4 {
+            place(&mut board, (0, col), Player::X);
+        }
+        for i in 0..4 {
+            place(&mut board, (4 + i, 10 - i), Player::O);
+        }
+        assert_eq!(board.check_result(), GameResult::InProgress);
+        for radius in [1, 2] {
+            let candidates = board.available_empty_moves_close(radius);
+            for player in [Player::X, Player::O] {
+                let wins: Vec<_> = board
+                    .available_empty_moves()
+                    .into_iter()
+                    .filter(|&position| {
+                        board.apply_move(position, player).unwrap().check_result()
+                            == GameResult::Win(player)
+                    })
+                    .collect();
+                assert!(!wins.is_empty());
+                for position in wins {
+                    assert!(
+                        candidates.contains(&position),
+                        "missing winning/blocking square {position:?} for {player:?}"
+                    );
+                }
+            }
+        }
     }
 }

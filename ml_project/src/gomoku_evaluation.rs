@@ -1,57 +1,51 @@
 use crate::gomoku_engine as ge;
 
-pub fn evaluate(board: &ge::Board, player: ge::Player) -> i32 {
+pub fn evaluate(board: &ge::Board, player: ge::Player) -> f32 {
     // simple heuristics for evaluating the position of the game of gomoku
     match board.check_result() {
-        ge::GameResult::Draw => return 0,
+        ge::GameResult::Draw => return 0.0,
         ge::GameResult::Win(_player) => {
             if player == _player {
-                100
+                100_f32
             } else {
-                -100
+                -100_f32
             }
         }
         ge::GameResult::InProgress => {
-            // check for 4 stones in any direction
-
-            // we wanna find the best evaluation
-            // i.e if we can find 4 stones without closed ends then this is almost winning
-            // and having this layout and finding later 2 stones with closed end then it does not
-            // mean that we have worse position
-            let mut best_eval: i32 = 0;
-            for stone_run in check_exactly_n_stones(board, player, 4) {
-                if stone_run.closed_ends == 0 {
-                    if best_eval < 80 {
-                        best_eval = 80;
-                    };
-                } else if stone_run.closed_ends == 1 {
-                    if best_eval < 55 {
-                        best_eval = 55;
-                    }
-                }
-            }
-            // check for 3 stones in any direction
-            for stone_run in check_exactly_n_stones(board, player, 3) {
-                if stone_run.closed_ends == 0 {
-                    if best_eval < 50 {
-                        best_eval = 50
-                    }
-                }
-                if stone_run.closed_ends == 1 {
-                    if best_eval < 30 {
-                        best_eval = 30;
-                    }
-                }
-            }
-            // we will not check 2 and less stones
-            return best_eval;
+            pattern_score(board, player) - pattern_score(board, player.opposite())
         }
     }
 }
 
+fn pattern_score(board: &ge::Board, player: ge::Player) -> f32 {
+    let mut best_eval: f32 = 0.0;
+
+    for stone_run in check_exactly_n_stones(board, player, 4) {
+        if stone_run.closed_ends == 0 {
+            best_eval += (100_f32 - best_eval) * 85_f32 / 100_f32;
+        } else if stone_run.closed_ends == 1 {
+            best_eval += (100_f32 - best_eval) * 55_f32 / 100_f32;
+        }
+    }
+    // check for 3 stones in any direction
+    for stone_run in check_exactly_n_stones(board, player, 3) {
+        if stone_run.closed_ends == 0 {
+            best_eval += (100_f32 - best_eval) * 50_f32 / 100_f32;
+        }
+        if stone_run.closed_ends == 1 {
+            best_eval += (100_f32 - best_eval) * 30_f32 / 100_f32;
+        }
+    }
+    for stone_run in check_exactly_n_stones(board, player, 2) {
+        if stone_run.closed_ends == 0 {
+            best_eval += (100_f32 - best_eval) * 5_f32 / 100_f32;
+        }
+    }
+    best_eval.min(99.0)
+}
+
 struct StonesFollowingLayout {
     coordinates: Vec<(usize, usize)>,
-
     closed_ends: usize, // 0, 1, 2
 }
 
