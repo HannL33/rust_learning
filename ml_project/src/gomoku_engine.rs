@@ -190,6 +190,58 @@ impl Board {
         }
         false
     }
+    pub fn win_in_one(&self, player: Player) -> Vec<Position> {
+        let mut vec_positions: Vec<Position> = Vec::new();
+        let possible_directions: [(isize, isize); 4] = [(0, 1), (1, 0), (1, 1), (-1, 1)];
+        for (r_idx, row) in self.cells().iter().enumerate() {
+            for (c_idx, &cell) in row.iter().enumerate() {
+                if cell == Cell::Empty {
+                    for (dr, dc) in possible_directions {
+                        let mut n_stones_in_direction = 0;
+                        for k in 1..=4 {
+                            let Some(new_r_idx) = r_idx.checked_add_signed(dr * k) else {
+                                break;
+                            };
+                            let Some(new_c_idx) = c_idx.checked_add_signed(dc * k) else {
+                                break;
+                            };
+                            if new_r_idx >= self.size() || new_c_idx >= self.size() {
+                                break;
+                            }
+
+                            if self.board[new_r_idx][new_c_idx] == Cell::Taken(player) {
+                                n_stones_in_direction += 1;
+                            } else {
+                                break;
+                            }
+                        }
+                        for k in (-4..=-1).rev() {
+                            let Some(new_r_idx) = r_idx.checked_add_signed(dr * k) else {
+                                break;
+                            };
+                            let Some(new_c_idx) = c_idx.checked_add_signed(dc * k) else {
+                                break;
+                            };
+                            // println!("New r idx, new c_idx: {} {}", new_r_idx, new_c_idx);
+                            if new_r_idx >= self.size() || new_c_idx >= self.size() {
+                                break;
+                            }
+                            if self.board[new_r_idx][new_c_idx] == Cell::Taken(player) {
+                                n_stones_in_direction += 1;
+                            } else {
+                                break;
+                            }
+                        }
+                        if n_stones_in_direction >= 4 {
+                            vec_positions.push((r_idx, c_idx));
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        vec_positions
+    }
     pub fn size(&self) -> usize {
         self.cells().len()
     }
@@ -873,5 +925,93 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn win_in_one_returns_no_moves_for_three_stones() {
+        let mut board = Board::new();
+        // Row 7, columns 4..=8: .XXX.
+        place(&mut board, (7, 5), Player::X);
+        place(&mut board, (7, 6), Player::X);
+        place(&mut board, (7, 7), Player::X);
+
+        let expected: Vec<Position> = vec![];
+        assert_eq!(board.win_in_one(Player::X), expected);
+    }
+
+    #[test]
+    fn win_in_one_returns_both_ends_of_a_horizontal_four() {
+        let mut board = Board::new();
+        // Row 7, columns 4..=9: .XXXX.
+        place(&mut board, (7, 5), Player::X);
+        place(&mut board, (7, 6), Player::X);
+        place(&mut board, (7, 7), Player::X);
+        place(&mut board, (7, 8), Player::X);
+
+        let expected = vec![(7, 4), (7, 9)];
+        assert_eq!(board.win_in_one(Player::X), expected);
+    }
+
+    #[test]
+    fn win_in_one_fills_a_diagonal_gap_to_make_six_stones() {
+        let mut board = Board::new();
+        // Down-right diagonal (3, 3)..=(8, 8): OO.OOO
+        place(&mut board, (3, 3), Player::O);
+        place(&mut board, (4, 4), Player::O);
+        place(&mut board, (6, 6), Player::O);
+        place(&mut board, (7, 7), Player::O);
+        place(&mut board, (8, 8), Player::O);
+
+        let expected = vec![(5, 5)];
+        assert_eq!(board.win_in_one(Player::O), expected);
+    }
+
+    #[test]
+    fn win_in_one_handles_border_runs_and_ignores_a_blocked_four() {
+        let mut board = Board::new();
+        // Vertical four at the top-left border; only (4, 0) wins.
+        place(&mut board, (0, 0), Player::X);
+        place(&mut board, (1, 0), Player::X);
+        place(&mut board, (2, 0), Player::X);
+        place(&mut board, (3, 0), Player::X);
+
+        // Down-left four at the top-right border; only (4, 10) wins.
+        place(&mut board, (0, 14), Player::X);
+        place(&mut board, (1, 13), Player::X);
+        place(&mut board, (2, 12), Player::X);
+        place(&mut board, (3, 11), Player::X);
+
+        // Row 10, columns 2..=7: OXXXXO. Neither end is playable.
+        place(&mut board, (10, 2), Player::O);
+        place(&mut board, (10, 3), Player::X);
+        place(&mut board, (10, 4), Player::X);
+        place(&mut board, (10, 5), Player::X);
+        place(&mut board, (10, 6), Player::X);
+        place(&mut board, (10, 7), Player::O);
+
+        let expected = vec![(4, 0), (4, 10)];
+        assert_eq!(board.win_in_one(Player::X), expected);
+    }
+
+    #[test]
+    fn win_in_one_returns_a_shared_winning_square_only_once() {
+        let mut board = Board::new();
+        // Rows 5..=9, columns 5..=9:
+        // ..X..
+        // ..X..
+        // XX.XX
+        // ..X..
+        // ..X..
+        place(&mut board, (5, 7), Player::X);
+        place(&mut board, (6, 7), Player::X);
+        place(&mut board, (7, 5), Player::X);
+        place(&mut board, (7, 6), Player::X);
+        place(&mut board, (7, 8), Player::X);
+        place(&mut board, (7, 9), Player::X);
+        place(&mut board, (8, 7), Player::X);
+        place(&mut board, (9, 7), Player::X);
+
+        let expected = vec![(7, 7)];
+        assert_eq!(board.win_in_one(Player::X), expected);
     }
 }

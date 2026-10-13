@@ -640,18 +640,21 @@ mod tests {
     #[test]
     fn evaluation_of_empty_board_is_zero_for_both_players() {
         for player in PLAYERS {
-            assert_eq!(evaluate(&ge::Board::new(), player), 0);
+            assert_eq!(evaluate(&ge::Board::new(), player), 0.0);
         }
     }
 
     #[test]
-    fn evaluation_ignores_runs_shorter_than_three() {
+    fn evaluation_scores_open_pairs_but_ignores_single_stones() {
         for player in PLAYERS {
             for length in [1, 2] {
                 for direction in DIRECTIONS {
                     let mut board = ge::Board::new();
                     place_run(&mut board, (5, 7), direction, length, player);
-                    assert_eq!(evaluate(&board, player), 0);
+                    assert_eq!(
+                        evaluate(&board, player),
+                        if length == 2 { 5.0 } else { 0.0 }
+                    );
                 }
             }
         }
@@ -662,14 +665,18 @@ mod tests {
         for player in PLAYERS {
             for direction in DIRECTIONS {
                 for (length, block_before, block_after, expected) in [
-                    (3, false, false, 50),
-                    (3, true, false, 30),
-                    (3, false, true, 30),
-                    (3, true, true, 0),
-                    (4, false, false, 80),
-                    (4, true, false, 55),
-                    (4, false, true, 55),
-                    (4, true, true, 0),
+                    (2, false, false, 5.0),
+                    (2, true, false, 0.0),
+                    (2, false, true, 0.0),
+                    (2, true, true, 0.0),
+                    (3, false, false, 50.0),
+                    (3, true, false, 30.0),
+                    (3, false, true, 30.0),
+                    (3, true, true, 0.0),
+                    (4, false, false, 85.0),
+                    (4, true, false, 55.0),
+                    (4, false, true, 55.0),
+                    (4, true, true, 0.0),
                 ] {
                     let mut board = ge::Board::new();
                     place_run(&mut board, (5, 7), direction, length, player);
@@ -701,7 +708,7 @@ mod tests {
     #[test]
     fn evaluation_at_border_treats_it_as_a_closed_end() {
         for player in PLAYERS {
-            for (length, expected) in [(3, 30), (4, 55)] {
+            for (length, expected) in [(3, 30.0), (4, 55.0)] {
                 let mut board = ge::Board::new();
                 place_run(&mut board, (5, 0), (0, 1), length, player);
                 assert_eq!(evaluate(&board, player), expected);
@@ -710,32 +717,37 @@ mod tests {
     }
 
     #[test]
-    fn evaluation_takes_maximum_regardless_of_run_location() {
+    fn evaluation_combines_threes_and_fours_regardless_of_run_location() {
         for player in PLAYERS {
             for (strong_row, weak_row) in [(3, 10), (10, 3)] {
                 let mut board = ge::Board::new();
                 place_run(&mut board, (strong_row, 5), (0, 1), 4, player);
                 place_run(&mut board, (weak_row, 5), (0, 1), 3, player);
-                assert_eq!(evaluate(&board, player), 80);
+                // An open four (85) and an open three (50) combine to 92.5.
+                assert_eq!(evaluate(&board, player), 92.5);
             }
         }
     }
 
     #[test]
-    fn evaluation_does_not_sum_multiple_runs() {
+    fn evaluation_combines_multiple_open_threes_with_diminishing_returns() {
         let mut board = ge::Board::new();
         place_run(&mut board, (3, 5), (0, 1), 3, ge::Player::X);
         place_run(&mut board, (10, 5), (0, 1), 3, ge::Player::X);
-        assert_eq!(evaluate(&board, ge::Player::X), 50);
+        assert_eq!(evaluate(&board, ge::Player::X), 75.0);
+        place_run(&mut board, (6, 5), (0, 1), 3, ge::Player::X);
+        assert_eq!(evaluate(&board, ge::Player::X), 87.5);
     }
 
     #[test]
-    fn nonterminal_evaluation_currently_scores_only_requested_player() {
-        // Characterizes v1: change this expectation when opponent scoring is added.
+    fn nonterminal_evaluation_subtracts_opponents_patterns() {
         let mut board = ge::Board::new();
         place_run(&mut board, (5, 7), (1, -1), 4, ge::Player::O);
-        assert_eq!(evaluate(&board, ge::Player::O), 80);
-        assert_eq!(evaluate(&board, ge::Player::X), 0);
+        assert_eq!(evaluate(&board, ge::Player::O), 85.0);
+        assert_eq!(evaluate(&board, ge::Player::X), -85.0);
+        place_run(&mut board, (12, 2), (0, 1), 3, ge::Player::X);
+        assert_eq!(evaluate(&board, ge::Player::X), -35.0);
+        assert_eq!(evaluate(&board, ge::Player::O), 35.0);
     }
 
     #[test]
@@ -746,8 +758,8 @@ mod tests {
                 place_run(&mut board, (3, 8), direction, 5, winner);
                 place_run(&mut board, (11, 5), (0, 1), 4, winner.opposite());
                 assert_eq!(board.check_result(), ge::GameResult::Win(winner));
-                assert_eq!(evaluate(&board, winner), 100);
-                assert_eq!(evaluate(&board, winner.opposite()), -100);
+                assert_eq!(evaluate(&board, winner), 100.0);
+                assert_eq!(evaluate(&board, winner.opposite()), -100.0);
             }
         }
     }
@@ -757,8 +769,8 @@ mod tests {
         for player in PLAYERS {
             let mut board = ge::Board::new();
             place_run(&mut board, (5, 7), (1, -1), 6, player);
-            assert_eq!(evaluate(&board, player), 100);
-            assert_eq!(evaluate(&board, player.opposite()), -100);
+            assert_eq!(evaluate(&board, player), 100.0);
+            assert_eq!(evaluate(&board, player.opposite()), -100.0);
         }
     }
 
@@ -778,7 +790,7 @@ mod tests {
         }
         assert_eq!(board.check_result(), ge::GameResult::Draw);
         for player in PLAYERS {
-            assert_eq!(evaluate(&board, player), 0);
+            assert_eq!(evaluate(&board, player), 0.0);
         }
     }
 
@@ -902,17 +914,17 @@ mod tests {
         place(&mut board, (0, 7), ge::Player::O);
         place_run(&mut board, (5, 3), (0, 1), 3, ge::Player::X);
         assert_eq!(board.check_result(), ge::GameResult::InProgress);
-        assert_eq!(evaluate(&board, ge::Player::X), 50);
+        assert_eq!(evaluate(&board, ge::Player::X), 50.0);
     }
 
     #[test]
-    fn evaluation_scores_a_blocked_four_higher_than_an_open_three() {
+    fn evaluation_combines_a_blocked_four_with_an_open_three() {
         let mut board = ge::Board::new();
         place_run(&mut board, (0, 3), (0, 1), 4, ge::Player::X);
         place(&mut board, (0, 7), ge::Player::O);
         place_run(&mut board, (5, 3), (0, 1), 3, ge::Player::X);
         assert_eq!(board.check_result(), ge::GameResult::InProgress);
-        assert_eq!(evaluate(&board, ge::Player::X), 55);
+        assert_eq!(evaluate(&board, ge::Player::X), 77.5);
     }
 
     #[test]
@@ -923,12 +935,11 @@ mod tests {
         place_run(&mut board, (5, 3), (0, 1), 4, ge::Player::X);
         place(&mut board, (5, 8), ge::Player::X);
         assert_eq!(board.check_result(), ge::GameResult::InProgress);
-        assert_eq!(evaluate(&board, ge::Player::X), 80);
+        assert_eq!(evaluate(&board, ge::Player::X), 85.0);
     }
 
     #[test]
-    fn evaluation_is_zero_when_the_player_has_only_closed_or_short_lines() {
-        // Single stones, a gap-broken pair and a dead four must not score.
+    fn evaluation_counts_an_open_pair_but_ignores_single_stones_and_dead_fours() {
         let mut board = ge::Board::new();
         place_run(&mut board, (2, 2), (0, 1), 2, ge::Player::X);
         place(&mut board, (4, 4), ge::Player::X);
@@ -936,7 +947,7 @@ mod tests {
         place(&mut board, (8, 2), ge::Player::O);
         place(&mut board, (8, 7), ge::Player::O);
         assert_eq!(board.check_result(), ge::GameResult::InProgress);
-        assert_eq!(evaluate(&board, ge::Player::X), 0);
+        assert_eq!(evaluate(&board, ge::Player::X), 5.0);
     }
 
     #[test]
