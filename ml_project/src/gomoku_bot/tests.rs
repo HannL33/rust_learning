@@ -93,6 +93,111 @@ fn alpha_beta_recognizes_that_blocking_one_end_of_an_open_four_still_loses() {
     }
 }
 
+#[test]
+fn double_threat_is_a_loss_for_the_side_to_move_even_at_depth_zero() {
+    for bot in PLAYERS {
+        for is_maximizing in [true, false] {
+            let player = if is_maximizing { bot } else { bot.opposite() };
+            for direction in DIRECTIONS {
+                let mut board = ge::Board::new();
+                place_line(&mut board, (7, 5), direction, 4, player.opposite());
+                assert_eq!(board.win_in_one(player.opposite()).len(), 2);
+                for depth in [0, 1] {
+                    assert_eq!(
+                        minimax_alpha_beta(board, is_maximizing, bot, depth, i32::MIN, i32::MAX,),
+                        if player == bot { -100 } else { 100 },
+                        "bot={bot:?}, player={player:?}, direction={direction:?}, depth={depth}",
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn immediate_win_takes_priority_over_an_opponents_double_threat() {
+    for bot in PLAYERS {
+        for is_maximizing in [true, false] {
+            let player = if is_maximizing { bot } else { bot.opposite() };
+            let mut board = ge::Board::new();
+            place_line(&mut board, (1, 0), (0, 1), 4, player);
+            place_line(&mut board, (3, 5), (0, 1), 4, player.opposite());
+            assert_eq!(board.win_in_one(player).len(), 1);
+            assert_eq!(board.win_in_one(player.opposite()).len(), 2);
+            assert_eq!(
+                minimax_alpha_beta(board, is_maximizing, bot, 0, i32::MIN, i32::MAX),
+                if player == bot { 100 } else { -100 },
+            );
+        }
+    }
+}
+
+fn position_before_h9_in_latest_screenshot() -> ge::Board {
+    let mut board = ge::Board::new();
+    // Black: G7, H7, J7, H8, I8, J8, J9, J10, K10.
+    for position in [
+        (6, 6),
+        (6, 7),
+        (6, 9),
+        (7, 7),
+        (7, 8),
+        (7, 9),
+        (8, 9),
+        (9, 9),
+        (9, 10),
+    ] {
+        place(&mut board, position, ge::Player::X);
+    }
+    // White: G6, H6, J6, I7, G8, K8, I9, J11, L11.
+    for position in [
+        (5, 6),
+        (5, 7),
+        (5, 9),
+        (6, 8),
+        (7, 6),
+        (7, 10),
+        (8, 8),
+        (10, 9),
+        (10, 11),
+    ] {
+        place(&mut board, position, ge::Player::O);
+    }
+    board
+}
+
+#[test]
+fn latest_screenshot_h9_allows_white_to_create_an_unstoppable_four_at_i6() {
+    let board = position_before_h9_in_latest_screenshot();
+    assert_eq!(board.check_result(), ge::GameResult::InProgress);
+    for player in PLAYERS {
+        assert!(board.win_in_one(player).is_empty());
+    }
+    let after_h9 = board.apply_move((8, 7), ge::Player::X).unwrap();
+    let after_i6 = after_h9.apply_move((5, 8), ge::Player::O).unwrap();
+    assert!(after_i6.win_in_one(ge::Player::X).is_empty());
+    assert_eq!(after_i6.win_in_one(ge::Player::O), vec![(5, 5), (5, 10)]);
+    assert_eq!(
+        minimax_alpha_beta(after_i6, true, ge::Player::X, 0, i32::MIN, i32::MAX),
+        -100,
+    );
+    assert_eq!(
+        minimax_alpha_beta(after_h9, false, ge::Player::X, 1, i32::MIN, i32::MAX),
+        -100,
+    );
+}
+
+#[test]
+fn latest_screenshot_bot_avoids_h9_and_the_forced_loss_at_ui_depth() {
+    let board = position_before_h9_in_latest_screenshot();
+    let chosen = best_move_alpha_beta(board, ge::Player::X, 4).unwrap();
+    assert_ne!(chosen, (8, 7), "H9 lets White force a win with I6");
+    let next = board.apply_move(chosen, ge::Player::X).unwrap();
+    assert!(
+        minimax_alpha_beta(next, false, ge::Player::X, 1, i32::MIN, i32::MAX) > -100,
+        "Chosen move {chosen:?} still lets White force an immediate loss",
+    );
+}
+
 fn screenshot_position(include_g1: bool, include_i6: bool) -> ge::Board {
     let mut board = ge::Board::new();
     // Coordinates transcribed from the supplied screenshot (zero-based).

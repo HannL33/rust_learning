@@ -19,37 +19,63 @@ pub fn minimax_alpha_beta(
         ge::GameResult::Draw => return 0,
         ge::GameResult::InProgress => {
             let player = if is_maximizing { bot } else { bot.opposite() };
-            let mut best = if is_maximizing { i32::MIN } else { i32::MAX };
-            if depth == 0 {
-                evaluate(&board, bot) as i32
-            } else {
-                let center = board.size() / 2;
-                let mut moves = board.available_empty_moves_close(2);
-                moves.sort_by_key(|(row, col)| row.abs_diff(center) + col.abs_diff(center));
-                if moves.is_empty() {
-                    return evaluate(&board, bot) as i32;
-                }
 
-                for coor in moves {
-                    // 2 is for now hyperparameter
-                    let new_board = board
-                        .apply_move(coor, player)
-                        .expect("Expect the best right now!");
-                    let score =
-                        minimax_alpha_beta(new_board, !is_maximizing, bot, depth - 1, alpha, beta);
-                    if is_maximizing {
-                        best = best.max(score);
-                        alpha = alpha.max(best);
+            if !board.win_in_one(player).is_empty() {
+                if player == bot {
+                    return 100;
+                } else {
+                    return -100;
+                }
+            }
+            let mut best = if is_maximizing { i32::MIN } else { i32::MAX };
+            let opponent_wins = board.win_in_one(player.opposite());
+            let mut moves = match opponent_wins.len() {
+                0 => {
+                    if depth == 0 {
+                        return evaluate(&board, bot) as i32;
+                    }
+                    board.available_empty_moves_close(2)
+                }
+                1 => opponent_wins,
+                _ => {
+                    if player == bot {
+                        return -100;
                     } else {
-                        best = best.min(score);
-                        beta = beta.min(best);
-                    };
-                    if alpha >= beta {
-                        break;
+                        return 100;
                     }
                 }
-                best
+            };
+
+            let center = board.size() / 2;
+            moves.sort_by_key(|(row, col)| row.abs_diff(center) + col.abs_diff(center));
+            if moves.is_empty() {
+                return evaluate(&board, bot) as i32;
             }
+
+            for coor in moves {
+                let new_board = board
+                    .apply_move(coor, player)
+                    .expect("Expect the best right now!");
+                let score = minimax_alpha_beta(
+                    new_board,
+                    !is_maximizing,
+                    bot,
+                    depth.saturating_sub(1),
+                    alpha,
+                    beta,
+                );
+                if is_maximizing {
+                    best = best.max(score);
+                    alpha = alpha.max(best);
+                } else {
+                    best = best.min(score);
+                    beta = beta.min(best);
+                };
+                if alpha >= beta {
+                    break;
+                }
+            }
+            best
         }
     }
 }
@@ -67,6 +93,13 @@ pub fn best_move_alpha_beta(
     }
     assert!(depth > 0, "Search depth must be at least 1");
 
+    if let Some(position) = board.win_in_one(player).first() {
+        return Some(*position);
+    }
+    let opponent_wins = board.win_in_one(player.opposite());
+    if opponent_wins.len() == 1 {
+        return Some(opponent_wins[0]);
+    }
     let center = board.size() / 2;
     let mut best = i32::MIN;
     let mut chosen = None;
