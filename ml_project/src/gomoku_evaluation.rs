@@ -62,7 +62,7 @@ fn find_stone_runs(board: &ge::Board, player: ge::Player) -> Vec<StoneRun> {
     // in regards to the DIRECTIONS
     for (r_idx, row) in board.cells().iter().enumerate() {
         for (c_idx, &cell) in row.iter().enumerate() {
-            if cell == ge::Cell::Empty || cell != ge::Cell::Taken(player) {
+            if cell != ge::Cell::Taken(player) {
                 continue;
             }
             for (dr, dc) in DIRECTIONS {
@@ -84,40 +84,28 @@ fn find_stone_runs(board: &ge::Board, player: ge::Player) -> Vec<StoneRun> {
                     length: 1,
                     open_ends: [open_before, None],
                 };
-                let mut next_r_idx = match r_idx.checked_add_signed(dr) {
-                    Some(v) => v,
-                    None => {
-                        res_vec.push(res_stone);
-                        continue;
-                    }
-                };
-                let mut next_c_idx = match c_idx.checked_add_signed(dc) {
-                    Some(v) => v,
-                    None => {
-                        res_vec.push(res_stone);
-                        continue;
-                    }
-                };
-                while next_r_idx < board.size() && next_c_idx < board.size() {
-                    match board.cells()[next_r_idx][next_c_idx] {
-                        ge::Cell::Taken(_player) => {
-                            if _player == player.opposite() {
+
+                let mut current = res_stone.start.clone();
+
+                loop {
+                    let next = current
+                        .0
+                        .checked_add_signed(dr)
+                        .zip(current.1.checked_add_signed(dc))
+                        .filter(|&(r, c)| r < board.size() && c < board.size());
+                    match next {
+                        Some((r, c)) => {
+                            if board.cells()[r][c] == ge::Cell::Taken(player.opposite()) {
+                                break;
+                            }
+                            if board.cells()[r][c] == ge::Cell::Empty {
+                                res_stone.open_ends[1] = Some((r, c));
                                 break;
                             }
                             res_stone.length += 1;
-
-                            let Some(nr) = next_r_idx.checked_add_signed(dr) else {
-                                break;
-                            };
-                            let Some(nc) = next_c_idx.checked_add_signed(dc) else {
-                                break;
-                            };
-
-                            next_r_idx = nr;
-                            next_c_idx = nc;
+                            current = (r, c);
                         }
-                        ge::Cell::Empty => {
-                            res_stone.open_ends[1] = Some((next_r_idx, next_c_idx));
+                        None => {
                             break;
                         }
                     }
