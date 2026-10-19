@@ -45,6 +45,9 @@ fn pattern_score(board: &ge::Board, player: ge::Player) -> f32 {
 }
 
 struct StoneRun {
+    /// start is the start of the sequence in regards to the direction
+    /// open_ends has an order [before first stone, after last stone]
+    /// series of length 1 are also returned by find_stone_runs
     start: ge::Position,
     direction: ge::Direction,
     length: usize,
@@ -59,7 +62,7 @@ fn find_stone_runs(board: &ge::Board, player: ge::Player) -> Vec<StoneRun> {
     // in regards to the DIRECTIONS
     for (r_idx, row) in board.cells().iter().enumerate() {
         for (c_idx, &cell) in row.iter().enumerate() {
-            if cell == ge::Cell::Empty {
+            if cell == ge::Cell::Empty || cell != ge::Cell::Taken(player) {
                 continue;
             }
             for (dr, dc) in DIRECTIONS {
@@ -74,9 +77,6 @@ fn find_stone_runs(board: &ge::Board, player: ge::Player) -> Vec<StoneRun> {
 
                 let open_before = prev.filter(|&(r, c)| board.cells()[r][c] == ge::Cell::Empty);
 
-                if board.cells()[r_idx][c_idx] != ge::Cell::Taken(player) {
-                    continue;
-                }
                 // explore that series
                 let mut res_stone = StoneRun {
                     start: (r_idx, c_idx),
@@ -98,26 +98,29 @@ fn find_stone_runs(board: &ge::Board, player: ge::Player) -> Vec<StoneRun> {
                         continue;
                     }
                 };
-                while next_r_idx < board.size()
-                    && next_c_idx < board.size()
-                    && (board.cells()[next_r_idx][next_c_idx] == ge::Cell::Taken(player)
-                        || board.cells()[next_r_idx][next_c_idx] == ge::Cell::Empty)
-                {
-                    if board.cells()[next_r_idx][next_c_idx] == ge::Cell::Empty {
-                        res_stone.open_ends[1] = Some((next_r_idx, next_c_idx));
-                        break;
+                while next_r_idx < board.size() && next_c_idx < board.size() {
+                    match board.cells()[next_r_idx][next_c_idx] {
+                        ge::Cell::Taken(_player) => {
+                            if _player == player.opposite() {
+                                break;
+                            }
+                            res_stone.length += 1;
+
+                            let Some(nr) = next_r_idx.checked_add_signed(dr) else {
+                                break;
+                            };
+                            let Some(nc) = next_c_idx.checked_add_signed(dc) else {
+                                break;
+                            };
+
+                            next_r_idx = nr;
+                            next_c_idx = nc;
+                        }
+                        ge::Cell::Empty => {
+                            res_stone.open_ends[1] = Some((next_r_idx, next_c_idx));
+                            break;
+                        }
                     }
-                    res_stone.length += 1;
-
-                    let Some(nr) = next_r_idx.checked_add_signed(dr) else {
-                        break;
-                    };
-                    let Some(nc) = next_c_idx.checked_add_signed(dc) else {
-                        break;
-                    };
-
-                    next_r_idx = nr;
-                    next_c_idx = nc;
                 }
                 res_vec.push(res_stone);
             }
