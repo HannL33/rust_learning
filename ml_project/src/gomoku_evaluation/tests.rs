@@ -5,6 +5,407 @@ type Direction = (isize, isize);
 const DIRECTIONS: [Direction; 4] = [(0, 1), (1, 0), (1, 1), (1, -1)];
 const PLAYERS: [ge::Player; 2] = [ge::Player::X, ge::Player::O];
 
+// Endpoints: [before start, after the last stone]. An isolated stone
+// is a length-one run in each of the four directions.
+type StoneRunSnapshot = (Position, Direction, usize, [Option<Position>; 2]);
+
+fn stone_run_snapshots(board: &ge::Board, player: ge::Player) -> Vec<StoneRunSnapshot> {
+    let mut runs: Vec<_> = find_stone_runs(board, player)
+        .into_iter()
+        .map(|run| (run.start, run.direction, run.length, run.open_ends))
+        .collect();
+    runs.sort_unstable();
+    runs
+}
+
+// Other axes through a stone may legitimately produce singletons. Compare
+// all runs of length >= 2; the first test separately covers length-one runs.
+fn assert_non_singleton_stone_runs(
+    board: &ge::Board,
+    player: ge::Player,
+    mut expected: Vec<StoneRunSnapshot>,
+) {
+    let actual: Vec<_> = stone_run_snapshots(board, player)
+        .into_iter()
+        .filter(|run| run.2 >= 2)
+        .collect();
+    expected.sort_unstable();
+    assert_eq!(actual, expected, "player={player:?}, board={board:?}");
+}
+
+#[test]
+fn find_stone_runs_empty_board_and_isolated_stone() {
+    for player in PLAYERS {
+        let mut board = ge::Board::new();
+        assert!(stone_run_snapshots(&board, player).is_empty());
+        let start = (7, 7);
+        place(&mut board, start, player);
+        let mut expected: Vec<_> = DIRECTIONS
+            .into_iter()
+            .map(|direction| {
+                (
+                    start,
+                    direction,
+                    1,
+                    [offset(start, direction, -1), offset(start, direction, 1)],
+                )
+            })
+            .collect();
+        expected.sort_unstable();
+        assert_eq!(stone_run_snapshots(&board, player), expected);
+        assert!(stone_run_snapshots(&board, player.opposite()).is_empty());
+    }
+}
+
+#[test]
+fn find_stone_runs_returns_each_maximal_run_once_in_all_four_directions() {
+    for player in PLAYERS {
+        for direction in DIRECTIONS {
+            for length in [2, 3, 4, 6] {
+                let mut board = ge::Board::new();
+                let start = (4, 7);
+                place_run(&mut board, start, direction, length, player);
+                assert_non_singleton_stone_runs(
+                    &board,
+                    player,
+                    vec![(
+                        start,
+                        direction,
+                        length,
+                        [
+                            offset(start, direction, -1),
+                            offset(start, direction, length as isize),
+                        ],
+                    )],
+                );
+                // One maximal run and three singleton axes per stone.
+                // Reject length-one fragments along the main axis as well.
+                assert_eq!(stone_run_snapshots(&board, player).len(), 1 + 3 * length);
+            }
+        }
+    }
+}
+
+#[test]
+fn find_stone_runs_marks_only_empty_endpoints_as_open() {
+    for player in PLAYERS {
+        for direction in DIRECTIONS {
+            for (block_before, block_after) in
+                [(false, false), (true, false), (false, true), (true, true)]
+            {
+                let mut board = ge::Board::new();
+                let start = (5, 7);
+                place_run(&mut board, start, direction, 3, player);
+                let before = offset(start, direction, -1).unwrap();
+                let after = offset(start, direction, 3).unwrap();
+                if block_before {
+                    place(&mut board, before, player.opposite());
+                }
+                if block_after {
+                    place(&mut board, after, player.opposite());
+                }
+                assert_non_singleton_stone_runs(
+                    &board,
+                    player,
+                    vec![(
+                        start,
+                        direction,
+                        3,
+                        [
+                            (!block_before).then_some(before),
+                            (!block_after).then_some(after),
+                        ],
+                    )],
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn find_stone_runs_handles_borders_and_full_board_length_without_panicking() {
+    for player in PLAYERS {
+        for (start, direction) in [
+            ((0, 0), (0, 1)),
+            ((0, 0), (1, 0)),
+            ((0, 0), (1, 1)),
+            ((0, ge::BOARD_SIZE - 1), (1, -1)),
+        ] {
+            for length in [3, ge::BOARD_SIZE] {
+                let mut board = ge::Board::new();
+                place_run(&mut board, start, direction, length, player);
+                assert_non_singleton_stone_runs(
+                    &board,
+                    player,
+                    vec![(
+                        start,
+                        direction,
+                        length,
+                        [None, offset(start, direction, length as isize)],
+                    )],
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn find_stone_runs_splits_at_empty_cells_and_opponents_without_mutating_board() {
+    for player in PLAYERS {
+        let mut board = ge::Board::new();
+        // Row 7: ..XX.XXOXXX....
+        place_run(&mut board, (7, 2), (0, 1), 2, player);
+        place_run(&mut board, (7, 5), (0, 1), 2, player);
+        place(&mut board, (7, 7), player.opposite());
+        place_run(&mut board, (7, 8), (0, 1), 3, player);
+        let before = *board.cells();
+        assert_non_singleton_stone_runs(
+            &board,
+            player,
+            vec![
+                ((7, 2), (0, 1), 2, [Some((7, 1)), Some((7, 4))]),
+                ((7, 5), (0, 1), 2, [Some((7, 4)), None]),
+                ((7, 8), (0, 1), 3, [None, Some((7, 11))]),
+            ],
+        );
+        assert_non_singleton_stone_runs(&board, player.opposite(), vec![]);
+        assert_eq!(*board.cells(), before);
+    }
+}
+
+#[test]
+fn find_stone_runs_keeps_crossing_runs_and_their_diagonals() {
+    for player in PLAYERS {
+        let mut board = ge::Board::new();
+        for position in [(7, 6), (7, 7), (7, 8), (6, 7), (8, 7)] {
+            place(&mut board, position, player);
+        }
+        assert_non_singleton_stone_runs(
+            &board,
+            player,
+            vec![
+                ((7, 6), (0, 1), 3, [Some((7, 5)), Some((7, 9))]),
+                ((6, 7), (1, 0), 3, [Some((5, 7)), Some((9, 7))]),
+                ((6, 7), (1, 1), 2, [Some((5, 6)), Some((8, 9))]),
+                ((7, 6), (1, 1), 2, [Some((6, 5)), Some((9, 8))]),
+                ((6, 7), (1, -1), 2, [Some((5, 8)), Some((8, 5))]),
+                ((7, 8), (1, -1), 2, [Some((6, 9)), Some((9, 6))]),
+            ],
+        );
+    }
+}
+
+// Independent oracle: enumerate complete geometric lines, then partition each
+// line into contiguous player segments. It never checks whether a board cell
+// is a start by looking backwards, unlike the production implementation.
+fn reference_stone_run_snapshots(board: &ge::Board, player: ge::Player) -> Vec<StoneRunSnapshot> {
+    let size = board.size();
+    let mut lines: Vec<(Position, Direction)> = Vec::new();
+    for i in 0..size {
+        lines.extend([
+            ((i, 0), (0, 1)),
+            ((0, i), (1, 0)),
+            ((0, i), (1, 1)),
+            ((0, i), (1, -1)),
+        ]);
+    }
+    for i in 1..size {
+        lines.extend([((i, 0), (1, 1)), ((i, size - 1), (1, -1))]);
+    }
+
+    let mut runs = Vec::new();
+    for (origin, direction) in lines {
+        let positions: Vec<Position> = (0..size as isize)
+            .map(|step| {
+                (
+                    origin.0 as isize + step * direction.0,
+                    origin.1 as isize + step * direction.1,
+                )
+            })
+            .take_while(|&(row, col)| {
+                (0..size as isize).contains(&row) && (0..size as isize).contains(&col)
+            })
+            .map(|(row, col)| (row as usize, col as usize))
+            .collect();
+
+        let mut cursor = 0;
+        while cursor < positions.len() {
+            let (row, col) = positions[cursor];
+            if board.cells()[row][col] != ge::Cell::Taken(player) {
+                cursor += 1;
+                continue;
+            }
+            let first = cursor;
+            while cursor < positions.len() {
+                let (row, col) = positions[cursor];
+                if board.cells()[row][col] != ge::Cell::Taken(player) {
+                    break;
+                }
+                cursor += 1;
+            }
+            let before = first.checked_sub(1).map(|index| positions[index]);
+            let after = positions.get(cursor).copied();
+            runs.push((
+                positions[first],
+                direction,
+                cursor - first,
+                [before, after].map(|position| {
+                    position.filter(|&(row, col)| board.cells()[row][col] == ge::Cell::Empty)
+                }),
+            ));
+        }
+    }
+    runs.sort_unstable();
+    runs
+}
+
+#[test]
+fn find_stone_runs_isolated_stones_at_every_position_have_correct_endpoints() {
+    for player in PLAYERS {
+        for row in 0..ge::BOARD_SIZE {
+            for col in 0..ge::BOARD_SIZE {
+                let mut board = ge::Board::new();
+                let start = (row, col);
+                place(&mut board, start, player);
+                let mut expected: Vec<_> = DIRECTIONS
+                    .into_iter()
+                    .map(|direction| {
+                        (
+                            start,
+                            direction,
+                            1,
+                            [offset(start, direction, -1), offset(start, direction, 1)],
+                        )
+                    })
+                    .collect();
+                expected.sort_unstable();
+                assert_eq!(
+                    stone_run_snapshots(&board, player),
+                    expected,
+                    "player={player:?}, position={start:?}",
+                );
+                assert!(stone_run_snapshots(&board, player.opposite()).is_empty());
+            }
+        }
+    }
+}
+
+#[test]
+fn find_stone_runs_preserves_runs_ending_at_bottom_and_right_borders() {
+    let last = ge::BOARD_SIZE - 1;
+    for player in PLAYERS {
+        for (start, direction) in [
+            ((last, last - 2), (0, 1)),
+            ((last - 2, last), (1, 0)),
+            ((last - 2, last - 2), (1, 1)),
+            ((last - 2, 2), (1, -1)),
+        ] {
+            for blocked_before in [false, true] {
+                let mut board = ge::Board::new();
+                place_run(&mut board, start, direction, 3, player);
+                let before = offset(start, direction, -1).unwrap();
+                if blocked_before {
+                    place(&mut board, before, player.opposite());
+                }
+                assert_non_singleton_stone_runs(
+                    &board,
+                    player,
+                    vec![(
+                        start,
+                        direction,
+                        3,
+                        [(!blocked_before).then_some(before), None],
+                    )],
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn find_stone_runs_does_not_join_opposite_edges_of_consecutive_rows() {
+    for player in PLAYERS {
+        for row in 0..ge::BOARD_SIZE - 1 {
+            let mut board = ge::Board::new();
+            let stones = [(row, ge::BOARD_SIZE - 1), (row + 1, 0)];
+            for position in stones {
+                place(&mut board, position, player);
+            }
+            let mut expected = Vec::new();
+            for start in stones {
+                for direction in DIRECTIONS {
+                    expected.push((
+                        start,
+                        direction,
+                        1,
+                        [offset(start, direction, -1), offset(start, direction, 1)],
+                    ));
+                }
+            }
+            expected.sort_unstable();
+            assert_eq!(stone_run_snapshots(&board, player), expected);
+        }
+    }
+}
+
+#[test]
+fn find_stone_runs_matches_reference_on_uniform_and_checkerboard_full_boards() {
+    for pattern in 0..3 {
+        let mut board = ge::Board::new();
+        for row in 0..ge::BOARD_SIZE {
+            for col in 0..ge::BOARD_SIZE {
+                let player = match pattern {
+                    0 => ge::Player::X,
+                    1 => ge::Player::O,
+                    _ if (row + col) % 2 == 0 => ge::Player::X,
+                    _ => ge::Player::O,
+                };
+                place(&mut board, (row, col), player);
+            }
+        }
+        for player in PLAYERS {
+            let actual = stone_run_snapshots(&board, player);
+            assert_eq!(
+                actual,
+                reference_stone_run_snapshots(&board, player),
+                "pattern={pattern}, player={player:?}",
+            );
+            assert!(actual.iter().all(|run| run.3 == [None, None]));
+        }
+    }
+}
+
+#[test]
+fn find_stone_runs_matches_reference_on_reproducible_random_boards() {
+    let mut rng = Lcg(0x5EED_570E);
+    let fills = [0, 5, 25, 50, 80, 100];
+    for sample in 0..180 {
+        let fill = fills[sample % fills.len()];
+        let board = random_board(&mut rng, fill);
+        let before = *board.cells();
+        for player in PLAYERS {
+            let actual = stone_run_snapshots(&board, player);
+            assert_eq!(
+                actual,
+                reference_stone_run_snapshots(&board, player),
+                "sample={sample}, fill={fill}, player={player:?}",
+            );
+            // Each stone belongs to exactly one maximal run in each axis.
+            let stone_count = board
+                .cells()
+                .iter()
+                .flatten()
+                .filter(|&&cell| cell == ge::Cell::Taken(player))
+                .count();
+            assert_eq!(
+                actual.iter().map(|run| run.2).sum::<usize>(),
+                4 * stone_count
+            );
+        }
+        assert_eq!(*board.cells(), before);
+    }
+}
+
 fn offset(start: Position, direction: Direction, steps: isize) -> Option<Position> {
     let row = start.0 as isize + direction.0 * steps;
     let col = start.1 as isize + direction.1 * steps;

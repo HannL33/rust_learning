@@ -3,6 +3,7 @@ use itertools::Itertools;
 pub const BOARD_SIZE: usize = 15;
 
 pub type Position = (usize, usize);
+pub type Direction = (isize, isize);
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Player {

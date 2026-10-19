@@ -44,6 +44,89 @@ fn pattern_score(board: &ge::Board, player: ge::Player) -> f32 {
     best_eval.min(99.0)
 }
 
+struct StoneRun {
+    start: ge::Position,
+    direction: ge::Direction,
+    length: usize,
+    open_ends: [Option<ge::Position>; 2],
+}
+
+fn find_stone_runs(board: &ge::Board, player: ge::Player) -> Vec<StoneRun> {
+    const DIRECTIONS: [ge::Direction; 4] = [(0, 1), (1, 0), (1, 1), (1, -1)];
+    let mut res_vec: Vec<StoneRun> = Vec::new();
+
+    // we want to start collecting the StoneRuns as the beginning of the sequence
+    // in regards to the DIRECTIONS
+    for (r_idx, row) in board.cells().iter().enumerate() {
+        for (c_idx, &cell) in row.iter().enumerate() {
+            if cell == ge::Cell::Empty {
+                continue;
+            }
+            for (dr, dc) in DIRECTIONS {
+                let prev = r_idx
+                    .checked_sub_signed(dr)
+                    .zip(c_idx.checked_sub_signed(dc))
+                    .filter(|&(r, c)| r < board.size() && c < board.size());
+
+                if prev.is_some_and(|(r, c)| board.cells()[r][c] == ge::Cell::Taken(player)) {
+                    continue;
+                }
+
+                let open_before = prev.filter(|&(r, c)| board.cells()[r][c] == ge::Cell::Empty);
+
+                if board.cells()[r_idx][c_idx] != ge::Cell::Taken(player) {
+                    continue;
+                }
+                // explore that series
+                let mut res_stone = StoneRun {
+                    start: (r_idx, c_idx),
+                    direction: (dr, dc),
+                    length: 1,
+                    open_ends: [open_before, None],
+                };
+                let mut next_r_idx = match r_idx.checked_add_signed(dr) {
+                    Some(v) => v,
+                    None => {
+                        res_vec.push(res_stone);
+                        continue;
+                    }
+                };
+                let mut next_c_idx = match c_idx.checked_add_signed(dc) {
+                    Some(v) => v,
+                    None => {
+                        res_vec.push(res_stone);
+                        continue;
+                    }
+                };
+                while next_r_idx < board.size()
+                    && next_c_idx < board.size()
+                    && (board.cells()[next_r_idx][next_c_idx] == ge::Cell::Taken(player)
+                        || board.cells()[next_r_idx][next_c_idx] == ge::Cell::Empty)
+                {
+                    if board.cells()[next_r_idx][next_c_idx] == ge::Cell::Empty {
+                        res_stone.open_ends[1] = Some((next_r_idx, next_c_idx));
+                        break;
+                    }
+                    res_stone.length += 1;
+
+                    let Some(nr) = next_r_idx.checked_add_signed(dr) else {
+                        break;
+                    };
+                    let Some(nc) = next_c_idx.checked_add_signed(dc) else {
+                        break;
+                    };
+
+                    next_r_idx = nr;
+                    next_c_idx = nc;
+                }
+                res_vec.push(res_stone);
+            }
+        }
+    }
+
+    res_vec
+}
+
 struct StonesFollowingLayout {
     coordinates: Vec<(usize, usize)>,
     closed_ends: usize, // 0, 1, 2
