@@ -433,6 +433,29 @@ fn place_run(
         .collect()
 }
 
+// Project the new representation onto coordinates and closed-end counts so
+// existing fixtures still check the same geometry, for a selected run length.
+fn runs_of_length(
+    board: &ge::Board,
+    player: ge::Player,
+    length: usize,
+) -> Vec<(Vec<Position>, usize)> {
+    find_stone_runs(board, player)
+        .into_iter()
+        .filter(|run| run.length == length)
+        .map(|run| {
+            let coordinates = (0..run.length)
+                .map(|step| {
+                    offset(run.start, run.direction, step as isize)
+                        .expect("a reported run must stay inside the board")
+                })
+                .collect();
+            let closed_ends = run.open_ends.iter().filter(|end| end.is_none()).count();
+            (coordinates, closed_ends)
+        })
+        .collect()
+}
+
 // Compare semantic results without requiring a particular scan order.
 fn assert_runs(
     board: &ge::Board,
@@ -440,10 +463,7 @@ fn assert_runs(
     length: usize,
     mut expected: Vec<(Vec<Position>, usize)>,
 ) {
-    let mut actual: Vec<_> = check_exactly_n_stones(board, player, length)
-        .into_iter()
-        .map(|run| (run.coordinates, run.closed_ends))
-        .collect();
+    let mut actual = runs_of_length(board, player, length);
     for (coordinates, _) in actual.iter_mut().chain(expected.iter_mut()) {
         coordinates.sort_unstable();
     }
@@ -966,9 +986,7 @@ fn evaluation_and_detection_leave_board_unchanged() {
     let before = *board.cells();
     for player in PLAYERS {
         evaluate(&board, player);
-        for length in [3, 4] {
-            check_exactly_n_stones(&board, player, length);
-        }
+        find_stone_runs(&board, player);
     }
     assert_eq!(*board.cells(), before);
 }
@@ -983,30 +1001,13 @@ fn detection_matches_a_reference_on_many_random_boards() {
         let board = random_board(&mut rng, 45);
         for player in PLAYERS {
             for n_stones in [1, 2, 3, 4, 5, 6] {
-                let actual = normalize(
-                    check_exactly_n_stones(&board, player, n_stones)
-                        .into_iter()
-                        .map(|run| (run.coordinates, run.closed_ends))
-                        .collect(),
-                );
+                let actual = normalize(runs_of_length(&board, player, n_stones));
                 let expected = normalize(reference_runs(&board, player, n_stones));
                 assert_eq!(
                     actual, expected,
                     "n_stones {n_stones}, player {player:?}, board {board:?}"
                 );
             }
-        }
-    }
-}
-
-#[test]
-fn detection_never_panics_for_lengths_larger_than_the_board() {
-    // The window bound must short-circuit before any slicing/indexing, so
-    // impossible lengths are safe even on a board of the maximum size.
-    let board = ge::Board::new();
-    for n_stones in [ge::BOARD_SIZE + 1, ge::BOARD_SIZE * 2, 1000] {
-        for player in PLAYERS {
-            assert!(check_exactly_n_stones(&board, player, n_stones).is_empty());
         }
     }
 }
@@ -1116,15 +1117,17 @@ fn evaluation_counts_an_open_pair_but_ignores_single_stones_and_dead_fours() {
 }
 
 #[test]
-fn zero_length_returns_no_runs() {
-    // Przyjmujemy kontrakt: długość 0 daje pusty wynik.
-    assert_runs(&ge::Board::new(), ge::Player::X, 0, vec![]);
-}
-
-#[test]
 fn full_width_run_has_two_closed_ends() {
-    let board = ge::Board::new();
-
-    // we will not consider configurations with 15 followin stones!
-    assert_runs(&board, ge::Player::X, ge::BOARD_SIZE, vec![]);
+    for player in PLAYERS {
+        for (start, direction) in [
+            ((0, 0), (0, 1)),
+            ((0, 0), (1, 0)),
+            ((0, 0), (1, 1)),
+            ((0, ge::BOARD_SIZE - 1), (1, -1)),
+        ] {
+            let mut board = ge::Board::new();
+            let coordinates = place_run(&mut board, start, direction, ge::BOARD_SIZE, player);
+            assert_runs(&board, player, ge::BOARD_SIZE, vec![(coordinates, 2)]);
+        }
+    }
 }
