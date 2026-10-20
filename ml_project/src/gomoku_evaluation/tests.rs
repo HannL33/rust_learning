@@ -413,6 +413,167 @@ fn offset(start: Position, direction: Direction, steps: isize) -> Option<Positio
     (bounds.contains(&row) && bounds.contains(&col)).then_some((row as usize, col as usize))
 }
 
+fn assert_available_line_length(
+    board: &ge::Board,
+    player: ge::Player,
+    start: Position,
+    direction: Direction,
+    expected: usize,
+) {
+    let run = find_stone_runs(board, player)
+        .into_iter()
+        .find(|run| run.start == start && run.direction == direction)
+        .expect("the fixture must contain a run with this start and direction");
+    assert_eq!(
+        available_line_length(board, &run, player),
+        expected,
+        "player={player:?}, start={start:?}, direction={direction:?}",
+    );
+}
+
+#[test]
+fn available_line_length_distinguishes_space_for_four_and_five() {
+    for player in PLAYERS {
+        for direction in DIRECTIONS {
+            // OXXX.O, O.XXXO, OXXX..O, O.XXX.O, O..XXXO.
+            for (free_before, free_after, expected) in
+                [(0, 1, 4), (1, 0, 4), (0, 2, 5), (1, 1, 5), (2, 0, 5)]
+            {
+                let mut board = ge::Board::new();
+                let start = (5, 7);
+                place_run(&mut board, start, direction, 3, player);
+                place(
+                    &mut board,
+                    offset(start, direction, -(free_before + 1)).unwrap(),
+                    player.opposite(),
+                );
+                place(
+                    &mut board,
+                    offset(start, direction, 3 + free_after).unwrap(),
+                    player.opposite(),
+                );
+                assert_available_line_length(&board, player, start, direction, expected);
+            }
+        }
+    }
+}
+
+#[test]
+fn available_line_length_counts_fully_blocked_run_once() {
+    for player in PLAYERS {
+        for direction in DIRECTIONS {
+            for length in [1, 3, 6] {
+                let mut board = ge::Board::new();
+                let start = (5, 7);
+                place_run(&mut board, start, direction, length, player);
+                place(
+                    &mut board,
+                    offset(start, direction, -1).unwrap(),
+                    player.opposite(),
+                );
+                place(
+                    &mut board,
+                    offset(start, direction, length as isize).unwrap(),
+                    player.opposite(),
+                );
+                assert_available_line_length(&board, player, start, direction, length);
+            }
+        }
+    }
+}
+
+#[test]
+fn available_line_length_uses_board_edges_including_short_corner_diagonals() {
+    let last = ge::BOARD_SIZE - 1;
+    for player in PLAYERS {
+        for (start, direction, expected) in [
+            ((0, 0), (0, 1), ge::BOARD_SIZE),
+            ((0, 0), (1, 0), ge::BOARD_SIZE),
+            ((0, 0), (1, 1), ge::BOARD_SIZE),
+            ((0, 0), (1, -1), 1),
+            ((0, last), (1, -1), ge::BOARD_SIZE),
+            ((0, last), (1, 1), 1),
+            ((last, 0), (1, 1), 1),
+            ((last, 0), (1, -1), ge::BOARD_SIZE),
+            ((last, last), (1, 1), ge::BOARD_SIZE),
+            ((last, last), (1, -1), 1),
+            ((0, 7), (1, 1), 8),
+            ((0, 7), (1, -1), 8),
+            ((7, 0), (1, 1), 8),
+            ((7, last), (1, -1), 8),
+            ((7, 7), (0, 1), ge::BOARD_SIZE),
+            ((7, 7), (1, 0), ge::BOARD_SIZE),
+            ((7, 7), (1, 1), ge::BOARD_SIZE),
+            ((7, 7), (1, -1), ge::BOARD_SIZE),
+        ] {
+            let mut board = ge::Board::new();
+            place(&mut board, start, player);
+            assert_available_line_length(&board, player, start, direction, expected);
+        }
+    }
+}
+
+#[test]
+fn available_line_length_crosses_gaps_and_own_stones_but_stops_at_opponents() {
+    for player in PLAYERS {
+        for direction in DIRECTIONS {
+            let mut board = ge::Board::new();
+            let start = (6, 7);
+            // X O X . XX . X . O X; the segment between the opponents has 7 fields.
+            // Own stones beyond either opponent must not be included.
+            for step in [-4, -2, 0, 1, 3, 6] {
+                place(&mut board, offset(start, direction, step).unwrap(), player);
+            }
+            for step in [-3, 5] {
+                place(
+                    &mut board,
+                    offset(start, direction, step).unwrap(),
+                    player.opposite(),
+                );
+            }
+            let before = *board.cells();
+            assert_available_line_length(&board, player, start, direction, 7);
+            assert_eq!(*board.cells(), before);
+        }
+    }
+}
+
+#[test]
+fn available_line_length_is_the_same_for_different_runs_in_one_segment() {
+    let mut board = ge::Board::new();
+    // Row 8: O.XX.X..XX.O...
+    // Columns 1..=10 are available: exactly 10 fields for each of the three runs.
+    for position in [(7, 2), (7, 3), (7, 5), (7, 8), (7, 9)] {
+        place(&mut board, position, ge::Player::X);
+    }
+    for position in [(7, 0), (7, 11), (6, 5), (8, 5)] {
+        place(&mut board, position, ge::Player::O);
+    }
+
+    assert_available_line_length(&board, ge::Player::X, (7, 2), (0, 1), 10);
+    assert_available_line_length(&board, ge::Player::X, (7, 5), (0, 1), 10);
+    assert_available_line_length(&board, ge::Player::X, (7, 8), (0, 1), 10);
+}
+
+#[test]
+fn available_line_length_counts_a_gapped_diagonal_between_opponent_and_edge() {
+    let mut board = ge::Board::new();
+    // Down-left diagonal:
+    // J1 O, I2 X, H3 ., G4 O, F5 ., E6 O, D7 O, C8 O, B9 ., A10 O.
+    // The available segment is H3..A10: exactly 8 fields.
+    // J1 is beyond the opponent; D6 and E7 are outside the diagonal.
+    for position in [(0, 9), (3, 6), (5, 4), (6, 3), (7, 2), (9, 0)] {
+        place(&mut board, position, ge::Player::O);
+    }
+    for position in [(1, 8), (5, 3), (6, 4)] {
+        place(&mut board, position, ge::Player::X);
+    }
+
+    assert_available_line_length(&board, ge::Player::O, (5, 4), (1, -1), 8);
+    assert_available_line_length(&board, ge::Player::O, (3, 6), (1, -1), 8);
+    assert_available_line_length(&board, ge::Player::O, (9, 0), (1, -1), 8);
+}
+
 fn place(board: &mut ge::Board, position: Position, player: ge::Player) {
     board.apply_move_inplace(position, player).unwrap();
 }

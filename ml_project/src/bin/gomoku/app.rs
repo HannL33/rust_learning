@@ -9,6 +9,8 @@ const STATUS_BACKGROUND: Color32 = Color32::from_rgb(242, 246, 237);
 const WOOD: Color32 = Color32::from_rgb(218, 181, 126);
 const GRID: Color32 = Color32::from_rgb(114, 83, 48);
 
+const SEMI_MOVES_SEARCHING: usize = 4;
+
 pub fn configure_style(ctx: &egui::Context) {
     // Keep the palette consistent even when the system uses a different theme.
     ctx.set_theme(egui::Theme::Light);
@@ -122,7 +124,11 @@ impl GomokuApp {
     }
 
     fn bot_move(&self) -> Option<(usize, usize)> {
-        ml_project::gomoku_bot::best_move_alpha_beta(*self.game.board(), self.game.turn(), 4)
+        ml_project::gomoku_bot::best_move_alpha_beta(
+            *self.game.board(),
+            self.game.turn(),
+            SEMI_MOVES_SEARCHING,
+        )
     }
 
     fn status(&self) -> String {
@@ -220,6 +226,7 @@ impl GomokuApp {
         if let Some(error) = self.error.as_deref() {
             ui.colored_label(Color32::from_rgb(160, 35, 35), error);
         }
+        ui.label(format!("Current moves: {:?}", self.moves));
     }
 
     fn mode_ui(&mut self, ui: &mut egui::Ui) {

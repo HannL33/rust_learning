@@ -22,6 +22,9 @@ fn pattern_score(board: &ge::Board, player: ge::Player) -> f32 {
     let stone_runs = find_stone_runs(board, player);
 
     for stone_run in stone_runs {
+        if available_line_length(board, stone_run, player) < 5 {
+            continue;
+        }
         let closed_ends = stone_run
             .open_ends
             .iter()
@@ -44,6 +47,7 @@ fn pattern_score(board: &ge::Board, player: ge::Player) -> f32 {
     best_eval.min(99.0)
 }
 
+#[derive(Debug)]
 struct StoneRun {
     /// start is the start of the sequence in regards to the direction
     /// open_ends has an order [before first stone, after last stone]
@@ -116,6 +120,65 @@ fn find_stone_runs(board: &ge::Board, player: ge::Player) -> Vec<StoneRun> {
     }
 
     res_vec
+}
+
+fn available_line_length(board: &ge::Board, run: &StoneRun, player: ge::Player) -> usize {
+    let mut max_len = run.length;
+
+    if run.open_ends.iter().filter(|end| end.is_none()).count() == 2 {
+        return max_len;
+    }
+
+    let direction = run.direction;
+    if run.open_ends[0].is_some() {
+        let mut current_pos = run.open_ends[0].unwrap();
+        max_len += 1;
+        loop {
+            let prev = current_pos
+                .0
+                .checked_sub_signed(direction.0)
+                .zip(current_pos.1.checked_sub_signed(direction.1))
+                .filter(|&(r, c)| r < board.size() && c < board.size());
+            match prev {
+                Some((p_r, p_c)) => {
+                    if board.cells()[p_r][p_c] == ge::Cell::Taken(player.opposite()) {
+                        break;
+                    } else {
+                        max_len += 1;
+                        current_pos = (p_r, p_c);
+                    }
+                }
+                None => {
+                    break;
+                }
+            }
+        }
+    }
+    if run.open_ends[1].is_some() {
+        let mut current_pos = run.open_ends[1].unwrap();
+        max_len += 1;
+        loop {
+            let next = current_pos
+                .0
+                .checked_add_signed(direction.0)
+                .zip(current_pos.1.checked_add_signed(direction.1))
+                .filter(|&(r, c)| r < board.size() && c < board.size());
+            match next {
+                Some((n_r, n_c)) => {
+                    if board.cells()[n_r][n_c] == ge::Cell::Taken(player.opposite()) {
+                        break;
+                    } else {
+                        max_len += 1;
+                        current_pos = (n_r, n_c);
+                    }
+                }
+                None => {
+                    break;
+                }
+            }
+        }
+    }
+    max_len
 }
 
 #[cfg(test)]
