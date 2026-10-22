@@ -22,7 +22,7 @@ fn pattern_score(board: &ge::Board, player: ge::Player) -> f32 {
     let stone_runs = find_stone_runs(board, player);
 
     for stone_run in stone_runs {
-        if available_line_length(board, stone_run, player) < 5 {
+        if available_line_length(board, &stone_run, player) < 5 {
             continue;
         }
         let closed_ends = stone_run

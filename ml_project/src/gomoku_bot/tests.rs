@@ -131,3 +131,112 @@ fn immediate_win_takes_priority_over_an_opponents_double_threat() {
         }
     }
 }
+
+#[test]
+fn forcing_search_returns_unknown_when_defender_has_already_won() {
+    let mut board = ge::Board::new();
+
+    // O has already won; X's possible next winning move is irrelevant.
+    place_line(&mut board, (3, 2), (0, 1), 5, ge::Player::O);
+    place_line(&mut board, (7, 5), (0, 1), 4, ge::Player::X);
+
+    assert_eq!(
+        search_forcing_line(&board, ge::Player::X, ge::Player::X, 0),
+        ForcingResult::Unknown,
+    );
+}
+
+#[test]
+fn forcing_search_respects_whose_turn_it_is() {
+    let mut board = ge::Board::new();
+
+    // XXXX. at the left edge: X can win at (7, 4), but O can block it.
+    place_line(&mut board, (7, 0), (0, 1), 4, ge::Player::X);
+
+    assert_eq!(
+        search_forcing_line(&board, ge::Player::X, ge::Player::X, 1),
+        ForcingResult::ProvenWin,
+    );
+    assert_eq!(
+        search_forcing_line(&board, ge::Player::X, ge::Player::O, 1),
+        ForcingResult::Unknown,
+    );
+}
+
+#[test]
+fn forcing_search_prioritizes_defenders_immediate_win() {
+    let mut board = ge::Board::new();
+
+    // X has an open four, but O moves first and wins immediately.
+    place_line(&mut board, (7, 5), (0, 1), 4, ge::Player::X);
+    place_line(&mut board, (3, 0), (0, 1), 4, ge::Player::O);
+
+    assert_eq!(
+        search_forcing_line(&board, ge::Player::X, ge::Player::O, 0),
+        ForcingResult::Unknown,
+    );
+}
+
+#[test]
+fn forcing_search_does_not_expand_attacks_with_zero_budget() {
+    let mut board = ge::Board::new();
+
+    // Creating an open four requires another move, which budget 0 forbids.
+    place_line(&mut board, (7, 5), (0, 1), 3, ge::Player::X);
+
+    assert_eq!(
+        search_forcing_line(&board, ge::Player::X, ge::Player::X, 0),
+        ForcingResult::Unknown,
+    );
+}
+
+#[test]
+fn forcing_search_finds_a_forced_block_that_also_wins_the_attack() {
+    let mut board = ge::Board::new();
+
+    for position in [(2, 7), (7, 5), (7, 6), (7, 8)] {
+        place(&mut board, position, ge::Player::X);
+    }
+    place_line(&mut board, (3, 7), (1, 0), 4, ge::Player::O);
+
+    // X at (2, 7) blocks one end of O's vertical four.
+    // X must block the other end at (7, 7), turning horizontal XX.X into
+    // an open four with winning squares (7, 4) and (7, 9).
+    assert_eq!(
+        search_forcing_line(&board, ge::Player::X, ge::Player::X, 1),
+        ForcingResult::ProvenWin,
+    );
+}
+
+#[test]
+fn forcing_search_finds_an_attack_that_creates_an_open_four() {
+    let mut board = ge::Board::new();
+
+    // .XXX. can become .XXXX. in one move, leaving two winning squares.
+    place_line(&mut board, (7, 5), (0, 1), 3, ge::Player::X);
+
+    assert_eq!(
+        search_forcing_line(&board, ge::Player::X, ge::Player::X, 1),
+        ForcingResult::ProvenWin,
+    );
+}
+
+#[test]
+fn forcing_search_continues_the_attack_after_a_defenders_forced_block() {
+    let mut board = ge::Board::new();
+
+    // OOOO. at the left edge forces X to block (7, 4).
+    place_line(&mut board, (7, 0), (0, 1), 4, ge::Player::O);
+    // O can then play (7, 5), creating an open vertical four.
+    place_line(&mut board, (4, 5), (1, 0), 3, ge::Player::O);
+
+    // One move covers only X's block; two also cover O's next attack.
+    assert_eq!(
+        search_forcing_line(&board, ge::Player::O, ge::Player::X, 1),
+        ForcingResult::Unknown,
+    );
+    assert_eq!(
+        search_forcing_line(&board, ge::Player::O, ge::Player::X, 2),
+        ForcingResult::ProvenWin,
+    );
+}
