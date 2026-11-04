@@ -56,12 +56,28 @@ fn latest_screenshot_h9_allows_white_to_create_an_unstoppable_four_at_i6() {
     assert!(after_i6.win_in_one(ge::Player::X).is_empty());
     assert_eq!(after_i6.win_in_one(ge::Player::O), vec![(5, 5), (5, 10)]);
     assert_eq!(
-        minimax_alpha_beta(after_i6, true, ge::Player::X, 0, i32::MIN, i32::MAX),
-        -100,
+        minimax_alpha_beta(
+            after_i6,
+            true,
+            ge::Player::X,
+            0,
+            f32::NEG_INFINITY,
+            f32::INFINITY,
+            2
+        ),
+        -9_996.0,
     );
     assert_eq!(
-        minimax_alpha_beta(after_h9, false, ge::Player::X, 1, i32::MIN, i32::MAX),
-        -100,
+        minimax_alpha_beta(
+            after_h9,
+            false,
+            ge::Player::X,
+            1,
+            f32::NEG_INFINITY,
+            f32::INFINITY,
+            1
+        ),
+        -9_996.0,
     );
 }
 
@@ -72,7 +88,15 @@ fn latest_screenshot_bot_avoids_h9_and_the_forced_loss_at_ui_depth() {
     assert_ne!(chosen, (8, 7), "H9 lets White force a win with I6");
     let next = board.apply_move(chosen, ge::Player::X).unwrap();
     assert!(
-        minimax_alpha_beta(next, false, ge::Player::X, 1, i32::MIN, i32::MAX) > -100,
+        minimax_alpha_beta(
+            next,
+            false,
+            ge::Player::X,
+            1,
+            f32::NEG_INFINITY,
+            f32::INFINITY,
+            1
+        ) > -100.0,
         "Chosen move {chosen:?} still lets White force an immediate loss",
     );
 }
@@ -147,8 +171,16 @@ fn screenshot_without_g1_and_i6_has_two_winning_replies_despite_different_attack
         // White's combined threats outweigh either attack in the current evaluation.
         assert!(evaluate(&next, ge::Player::X) < 0.0);
         assert_eq!(
-            minimax_alpha_beta(next, false, ge::Player::X, 1, i32::MIN, i32::MAX),
-            -100
+            minimax_alpha_beta(
+                next,
+                false,
+                ge::Player::X,
+                1,
+                f32::NEG_INFINITY,
+                f32::INFINITY,
+                1
+            ),
+            -9_998.0
         );
     }
     let after_f5 = board.apply_move((4, 5), ge::Player::X).unwrap();
@@ -167,13 +199,21 @@ fn screenshot_without_g1_and_i6_has_two_winning_replies_despite_different_attack
     let chosen = best_move_alpha_beta(board, ge::Player::X, 2).unwrap();
     let next = board.apply_move(chosen, ge::Player::X).unwrap();
     assert_eq!(
-        minimax_alpha_beta(next, false, ge::Player::X, 1, i32::MIN, i32::MAX),
-        -100
+        minimax_alpha_beta(
+            next,
+            false,
+            ge::Player::X,
+            1,
+            f32::NEG_INFINITY,
+            f32::INFINITY,
+            1
+        ),
+        -9_998.0
     );
 }
 
 #[test]
-fn second_screenshot_prefers_i9_over_f2_at_three_plies_with_current_heuristic() {
+fn second_screenshot_compares_f2_and_i9_at_three_plies_with_fractional_heuristics() {
     // Position before the marked black move F2 in the second screenshot.
     let mut board = ge::Board::new();
     for position in [(2, 8), (3, 7), (5, 5), (6, 6), (7, 7)] {
@@ -192,12 +232,28 @@ fn second_screenshot_prefers_i9_over_f2_at_three_plies_with_current_heuristic() 
 
     // Search also considers White's response and Black's following move.
     assert_eq!(
-        minimax_alpha_beta(f2, false, ge::Player::X, 2, i32::MIN, i32::MAX),
-        12
+        minimax_alpha_beta(
+            f2,
+            false,
+            ge::Player::X,
+            2,
+            f32::NEG_INFINITY,
+            f32::INFINITY,
+            1
+        ),
+        12.5
     );
     assert_eq!(
-        minimax_alpha_beta(i9, false, ge::Player::X, 2, i32::MIN, i32::MAX),
-        25
+        minimax_alpha_beta(
+            i9,
+            false,
+            ge::Player::X,
+            2,
+            f32::NEG_INFINITY,
+            f32::INFINITY,
+            1
+        ),
+        9.75
     );
 
     // White blocks the lower three at I9; Black then makes an open three
@@ -211,12 +267,14 @@ fn second_screenshot_prefers_i9_over_f2_at_three_plies_with_current_heuristic() 
     assert_eq!(evaluate(&after_f2, ge::Player::X), 45.0);
 
     // I9 creates F6-G7-H8-I9, already blocked by White at E5. White
-    // closes its remaining endpoint J10; Black can form J2-I3-H4.
+    // closes its remaining endpoint J10; Black then plays H9, forming two
+    // open pairs (H8-H9 and H9-I9) and closing White's F7-G8 pair.
+    // The closed F6-I9 four scores zero; two open pairs give 5 + 95 * 5 / 100.
     let after_i9 = i9
         .apply_move((9, 9), ge::Player::O)
         .unwrap()
-        .apply_move((1, 9), ge::Player::X)
+        .apply_move((8, 7), ge::Player::X)
         .unwrap();
     assert_eq!(after_i9.check_result(), ge::GameResult::InProgress);
-    assert_eq!(evaluate(&after_i9, ge::Player::X), 25.0);
+    assert_eq!(evaluate(&after_i9, ge::Player::X), 9.75);
 }

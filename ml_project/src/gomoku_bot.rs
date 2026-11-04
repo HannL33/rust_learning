@@ -1,49 +1,74 @@
-use crate::{gomoku_engine as ge, gomoku_evaluation::evaluate, tic_tac_engine::Cell::Taken};
+use crate::{gomoku_engine as ge, gomoku_evaluation::evaluate};
 const CLOSE_RANGE_PARAM: usize = 2;
-const FORCING_BUDGET: usize = 5;
+const FORCING_BUDGET: usize = 8;
+const WIN_MAX_SCORE: f32 = 10_000.0;
+const MIN_MATE_SCORE: f32 = WIN_MAX_SCORE - (ge::BOARD_SIZE * ge::BOARD_SIZE) as f32;
+
+struct ProvenCandidate {
+    position: ge::Position,
+    plies: usize,
+    minimax_score: Option<f32>,
+}
+
+struct UnresolvedCandidate {
+    position: ge::Position,
+    minimax_score: f32,
+}
+
+enum RootCandidate {
+    ProvenWin(ProvenCandidate),
+    ProvenLoss(ProvenCandidate),
+    Unresolved(UnresolvedCandidate),
+}
+
+enum ProvenGroup {
+    Wins(Vec<ProvenCandidate>),
+    Losses(Vec<ProvenCandidate>),
+}
 
 pub fn minimax_alpha_beta(
     board: ge::Board,
     is_maximizing: bool,
     bot: ge::Player,
     depth: usize,
-    mut alpha: i32,
-    mut beta: i32,
-) -> i32 {
+    mut alpha: f32,
+    mut beta: f32,
+    ply: usize,
+) -> f32 {
     match board.check_result() {
         ge::GameResult::Win(_player) => {
             if _player == bot {
-                return 100;
+                return WIN_MAX_SCORE - ply as f32;
             } else {
-                return -100;
+                return -WIN_MAX_SCORE + ply as f32;
             }
         }
-        ge::GameResult::Draw => return 0,
+        ge::GameResult::Draw => return 0_f32,
         ge::GameResult::InProgress => {
             let player = if is_maximizing { bot } else { bot.opposite() };
 
             if !board.win_in_one(player).is_empty() {
                 if player == bot {
-                    return 100;
+                    return WIN_MAX_SCORE - (ply + 1) as f32;
                 } else {
-                    return -100;
+                    return -WIN_MAX_SCORE + (ply + 1) as f32;
                 }
             }
-            let mut best = if is_maximizing { i32::MIN } else { i32::MAX };
+            let mut best = if is_maximizing { f32::MIN } else { f32::MAX };
             let opponent_wins = board.win_in_one(player.opposite());
             let mut moves = match opponent_wins.len() {
                 0 => {
                     if depth == 0 {
-                        return evaluate(&board, bot) as i32;
+                        return evaluate(&board, bot);
                     }
-                    board.available_empty_moves_close(2)
+                    board.available_empty_moves_close(CLOSE_RANGE_PARAM)
                 }
                 1 => opponent_wins,
                 _ => {
                     if player == bot {
-                        return -100;
+                        return -WIN_MAX_SCORE + (ply + 2) as f32;
                     } else {
-                        return 100;
+                        return WIN_MAX_SCORE - (ply + 2) as f32;
                     }
                 }
             };
@@ -51,7 +76,7 @@ pub fn minimax_alpha_beta(
             let center = board.size() / 2;
             moves.sort_by_key(|(row, col)| row.abs_diff(center) + col.abs_diff(center));
             if moves.is_empty() {
-                return evaluate(&board, bot) as i32;
+                return evaluate(&board, bot);
             }
 
             for coor in moves {
@@ -65,6 +90,7 @@ pub fn minimax_alpha_beta(
                     depth.saturating_sub(1),
                     alpha,
                     beta,
+                    ply + 1,
                 );
                 if is_maximizing {
                     best = best.max(score);
@@ -103,10 +129,6 @@ pub fn best_move_alpha_beta(
         return Some(opponent_wins[0]);
     }
     let center = board.size() / 2;
-    let mut best = i32::MIN;
-    let mut chosen = None;
-    let mut alpha = i32::MIN;
-    let beta = i32::MAX;
     if board
         .cells()
         .iter()
@@ -119,40 +141,176 @@ pub fn best_move_alpha_beta(
 
     moves.sort_by_key(|&(row, col)| row.abs_diff(center) + col.abs_diff(center));
 
-    for coor in moves {
-        let new_board = board.apply_move(coor, player).expect("Expect the best");
-        let score;
-        if search_forcing_line(&new_board, player, player.opposite(), FORCING_BUDGET)
-            == ForcingResult::ProvenWin
+    let mut candidates = Vec::with_capacity(moves.len());
+    // Only ordinary minimax results contribute to this window. Forcing proofs
+    // establish the outcome, but their distances are upper bounds.
+    let mut alpha = f32::NEG_INFINITY;
+    for position in moves {
+        let new_board = board.apply_move(position, player).expect("Expect the best");
+        if let ForcingResult::ProvenWin { plies } =
+            search_forcing_line(&new_board, player, player.opposite(), FORCING_BUDGET)
         {
-            score = 100
-        } else if search_forcing_line(
+            candidates.push(RootCandidate::ProvenWin(ProvenCandidate {
+                position,
+                plies: plies + 1,
+                minimax_score: None,
+            }));
+        } else if let ForcingResult::ProvenWin { plies } = search_forcing_line(
             &new_board,
             player.opposite(),
             player.opposite(),
             FORCING_BUDGET,
-        ) == ForcingResult::ProvenWin
-        {
-            score = -100
+        ) {
+            candidates.push(RootCandidate::ProvenLoss(ProvenCandidate {
+                position,
+                plies: plies + 1,
+                minimax_score: None,
+            }));
         } else {
-            score = minimax_alpha_beta(new_board, false, player, depth - 1, alpha, beta);
-        }
-        if score > best {
-            best = score;
-            chosen = Some(coor);
-        }
-        alpha = alpha.max(best);
-        if best == 100 {
-            break;
+            let score =
+                minimax_alpha_beta(new_board, false, player, depth - 1, alpha, f32::INFINITY, 1);
+            let candidate = if score >= MIN_MATE_SCORE && score > alpha {
+                // With beta = infinity, improving alpha gives an exact search
+                // result. A fail-low positive bound alone cannot prove a win.
+                RootCandidate::ProvenWin(ProvenCandidate {
+                    position,
+                    plies: (WIN_MAX_SCORE - score) as usize,
+                    minimax_score: Some(score),
+                })
+            } else if score <= -MIN_MATE_SCORE {
+                // Even a fail-low upper bound in the losing range proves loss.
+                RootCandidate::ProvenLoss(ProvenCandidate {
+                    position,
+                    plies: (WIN_MAX_SCORE + score) as usize,
+                    minimax_score: Some(score),
+                })
+            } else {
+                RootCandidate::Unresolved(UnresolvedCandidate {
+                    position,
+                    minimax_score: score,
+                })
+            };
+            candidates.push(candidate);
+            alpha = alpha.max(score);
         }
     }
-    println!("Curren evaluation by bot: {:?}", best);
-    Some(chosen).flatten()
+
+    let mut wins = Vec::new();
+    let mut losses = Vec::new();
+    let mut best_unresolved: Option<UnresolvedCandidate> = None;
+    for candidate in candidates {
+        match candidate {
+            RootCandidate::ProvenWin(candidate) => wins.push(candidate),
+            RootCandidate::ProvenLoss(candidate) => losses.push(candidate),
+            RootCandidate::Unresolved(candidate) => {
+                if best_unresolved
+                    .as_ref()
+                    .is_none_or(|best| candidate.minimax_score > best.minimax_score)
+                {
+                    best_unresolved = Some(candidate);
+                }
+            }
+        }
+    }
+    if !wins.is_empty() {
+        return best_proven_move(board, player, depth, ProvenGroup::Wins(wins));
+    }
+    if let Some(chosen) = best_unresolved {
+        println!(
+            "Current evaluation by bot (heuristic): {}",
+            chosen.minimax_score
+        );
+        return Some(chosen.position);
+    }
+
+    best_proven_move(board, player, depth, ProvenGroup::Losses(losses))
+}
+
+fn best_proven_move(
+    board: ge::Board,
+    player: ge::Player,
+    depth: usize,
+    group: ProvenGroup,
+) -> Option<ge::Position> {
+    let (mut candidates, winning) = match group {
+        ProvenGroup::Wins(candidates) => (candidates, true),
+        ProvenGroup::Losses(candidates) => (candidates, false),
+    };
+    candidates.sort_by_key(|candidate| {
+        let plies = candidate.plies;
+        if winning { plies } else { usize::MAX - plies }
+    });
+    let mut best_exact: Option<(usize, f32)> = None;
+    let mut has_unresolved_distance = false;
+    for (index, candidate) in candidates.iter_mut().enumerate() {
+        if !winning
+            && best_exact
+                .is_some_and(|(_, score)| candidate.plies <= (WIN_MAX_SCORE + score) as usize)
+        {
+            // This proof guarantees a loss no later than the best defence
+            // already found, so the candidate cannot improve its distance.
+            continue;
+        }
+        let next = board
+            .apply_move(candidate.position, player)
+            .expect("Root candidate must be legal");
+        let score = minimax_alpha_beta(
+            next,
+            false,
+            player,
+            depth - 1,
+            f32::NEG_INFINITY,
+            f32::INFINITY,
+            1,
+        );
+        candidate.minimax_score = Some(score);
+        let resolved = if winning {
+            score >= MIN_MATE_SCORE
+        } else {
+            score <= -MIN_MATE_SCORE
+        };
+        if resolved {
+            if best_exact.is_none_or(|(_, old)| score > old) {
+                best_exact = Some((index, score));
+            }
+            // Immediate root wins were handled earlier. Three half-moves is
+            // therefore the shortest remaining win, regardless of other lines.
+            if winning && score == WIN_MAX_SCORE - 3.0 {
+                break;
+            }
+        } else {
+            has_unresolved_distance = true;
+        }
+    }
+
+    // For a loss, a longer proof only bounds how soon the opponent can win.
+    // Prefer the longest resolved defence whenever one was found.
+    let (chosen_index, distance_resolved) = match best_exact {
+        Some((index, score))
+            if !winning || !has_unresolved_distance || score == WIN_MAX_SCORE - 3.0 =>
+        {
+            (index, true)
+        }
+
+        _ => (0, false),
+    };
+    let chosen = candidates.get(chosen_index)?;
+    let outcome = if winning { "win" } else { "loss" };
+    if let (true, Some(score)) = (distance_resolved, chosen.minimax_score) {
+        let plies = (WIN_MAX_SCORE - score.abs()) as usize;
+        println!("Confirmed {outcome}; distance in searched tree: {plies} half-moves");
+    } else {
+        let plies = chosen.plies;
+        println!(
+            "Confirmed {outcome}; distance unresolved; proof line: at most {plies} half-moves"
+        );
+    }
+    Some(chosen.position)
 }
 
 #[derive(Debug, PartialEq)]
 enum ForcingResult {
-    ProvenWin,
+    ProvenWin { plies: usize },
     Unknown,
 }
 
@@ -175,53 +333,75 @@ fn forcing_moves(board: &ge::Board, player: ge::Player) -> Vec<ge::Position> {
     res_vec
 }
 
-pub fn search_forcing_line(
+fn search_forcing_line(
     board: &ge::Board,
     attacker: ge::Player,
     to_move: ge::Player,
     budget: usize,
 ) -> ForcingResult {
-    if board.check_result() == ge::GameResult::Win(attacker) {
-        return ForcingResult::ProvenWin;
-    } else if board.check_result() == ge::GameResult::Draw
-        || board.check_result() == ge::GameResult::Win(attacker.opposite())
-    {
+    match board.check_result() {
+        ge::GameResult::Win(winner) if winner == attacker => {
+            return ForcingResult::ProvenWin { plies: 0 };
+        }
+        ge::GameResult::Win(_) | ge::GameResult::Draw => return ForcingResult::Unknown,
+        ge::GameResult::InProgress => {}
+    }
+    if budget == 0 {
         return ForcingResult::Unknown;
     }
 
     if !board.win_in_one(to_move).is_empty() {
         if to_move == attacker {
-            return ForcingResult::ProvenWin;
+            return ForcingResult::ProvenWin { plies: 1 };
         } else {
             return ForcingResult::Unknown;
         }
     }
-    let n_wins = board.win_in_one(to_move.opposite()).len();
-    if n_wins >= 2 {
-        if to_move.opposite() == attacker {
-            return ForcingResult::ProvenWin;
+    let opponent_wins = board.win_in_one(to_move.opposite());
+    if opponent_wins.len() >= 2 {
+        if to_move.opposite() == attacker && budget >= 2 {
+            return ForcingResult::ProvenWin { plies: 2 };
         } else {
             return ForcingResult::Unknown;
         }
     };
-    if n_wins == 1 && budget >= 1 {
-        let next_forcing_move = board.win_in_one(to_move.opposite())[0];
+    if opponent_wins.len() == 1 {
+        let next_forcing_move = opponent_wins[0];
         let next_board = board
             .apply_move(next_forcing_move, to_move)
             .expect("We expect in search forcing line to apply move correctly!");
-        return search_forcing_line(&next_board, attacker, to_move.opposite(), budget - 1);
+        return match search_forcing_line(&next_board, attacker, to_move.opposite(), budget - 1) {
+            ForcingResult::ProvenWin { plies } => ForcingResult::ProvenWin { plies: plies + 1 },
+            ForcingResult::Unknown => ForcingResult::Unknown,
+        };
     };
 
-    if to_move == attacker && budget >= 1 {
+    if to_move == attacker {
+        let mut candidate_plies: Option<usize> = None;
         for threat_move in forcing_moves(board, attacker) {
             let next_board = board
                 .apply_move(threat_move, to_move)
                 .expect("We expect in search forcing line to apply move correctly!");
-            if search_forcing_line(&next_board, attacker, to_move.opposite(), budget - 1)
-                == ForcingResult::ProvenWin
-            {
-                return ForcingResult::ProvenWin;
-            };
+
+            match search_forcing_line(&next_board, attacker, to_move.opposite(), budget - 1) {
+                ForcingResult::ProvenWin { plies } => {
+                    candidate_plies = Some(match candidate_plies {
+                        None => plies + 1,
+                        Some(old) => old.min(plies + 1),
+                    });
+                    // With no immediate win at this node, three half-moves is
+                    // the shortest possible attack. No other line can improve it.
+                    if candidate_plies == Some(3) {
+                        break;
+                    }
+                }
+                ForcingResult::Unknown => {
+                    continue;
+                }
+            }
+        }
+        if let Some(ret_plies) = candidate_plies {
+            return ForcingResult::ProvenWin { plies: ret_plies };
         }
     }
 
