@@ -241,7 +241,7 @@ fn second_screenshot_compares_f2_and_i9_at_three_plies_with_fractional_heuristic
             f32::INFINITY,
             1
         ),
-        12.5
+        -10.0
     );
     assert_eq!(
         minimax_alpha_beta(
@@ -277,4 +277,31 @@ fn second_screenshot_compares_f2_and_i9_at_three_plies_with_fractional_heuristic
         .unwrap();
     assert_eq!(after_i9.check_result(), ge::GameResult::InProgress);
     assert_eq!(evaluate(&after_i9, ge::Player::X), 9.75);
+}
+
+#[test]
+fn depth_zero_without_immediate_threats_returns_the_new_heuristic() {
+    let mut board = ge::Board::new();
+    // .XX.X. is a strong three: one move creates the open four .XXXX.
+    for position in [(7, 3), (7, 4), (7, 6)] {
+        place(&mut board, position, ge::Player::X);
+    }
+    assert!(board.win_in_one(ge::Player::X).is_empty());
+    assert!(board.win_in_one(ge::Player::O).is_empty());
+    assert_eq!(evaluate(&board, ge::Player::X), 50.0);
+
+    for (is_maximizing, bot) in [(true, ge::Player::X), (false, ge::Player::O)] {
+        assert_eq!(
+            minimax_alpha_beta(
+                board,
+                is_maximizing,
+                bot,
+                0,
+                f32::NEG_INFINITY,
+                f32::INFINITY,
+                0
+            ),
+            evaluate(&board, bot),
+        );
+    }
 }

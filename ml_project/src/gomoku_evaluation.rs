@@ -3,48 +3,169 @@ use crate::gomoku_engine as ge;
 pub fn evaluate(board: &ge::Board, player: ge::Player) -> f32 {
     // simple heuristics for evaluating the position of the game of gomoku
     match board.check_result() {
-        ge::GameResult::Draw => return 0.0,
-        ge::GameResult::Win(_player) => {
-            if player == _player {
+        ge::GameResult::Draw => 0.0,
+        ge::GameResult::Win(winner) => {
+            if player == winner {
                 100_f32
             } else {
                 -100_f32
             }
         }
-        ge::GameResult::InProgress => {
-            pattern_score(board, player) - pattern_score(board, player.opposite())
-        }
+        ge::GameResult::InProgress => evaluate_in_progress(board, player),
     }
+}
+
+/// Scores patterns after the caller has ruled out a win or draw.
+pub(crate) fn evaluate_in_progress(board: &ge::Board, player: ge::Player) -> f32 {
+    pattern_score(board, player) - pattern_score(board, player.opposite())
 }
 
 fn pattern_score(board: &ge::Board, player: ge::Player) -> f32 {
     let mut best_eval: f32 = 0.0;
     let stone_runs = find_stone_runs(board, player);
+    let strong_threes = find_threes_with_open_four_potential(board, player, &stone_runs);
 
-    for stone_run in stone_runs {
-        if available_line_length(board, &stone_run, player) < 5 {
-            continue;
-        }
-        let closed_ends = stone_run
-            .open_ends
-            .iter()
-            .filter(|end| end.is_none())
-            .count();
-
-        // nice and fancy match instead of if's...
-        let weight = match (stone_run.length, closed_ends) {
+    let strong_three_weights = std::iter::repeat_n(50.0, strong_threes.len());
+    let run_weights = stone_runs.iter().filter_map(|run| {
+        let closed_ends = run.open_ends.iter().filter(|end| end.is_none()).count();
+        let weight = match (run.length, closed_ends) {
+            (1, _) => return None,
             (4, 0) => 85.0,
             (4, 1) => 55.0,
-            (3, 0) => 50.0,
-            (3, 1) => 30.0,
+            (3, 0 | 1) => 30.0,
             (2, 0) => 5.0,
-            _ => 0.0,
+            _ => return None,
         };
 
+        let part_of_strong_three = run_is_part_of_strong_three(run, &strong_threes);
+        let too_short = available_line_length(board, run, player) < 5;
+
+        (!part_of_strong_three && !too_short).then_some(weight)
+    });
+
+    // Each weight adds a percentage of the remaining gap to 100.
+    let mut best_eval: f32 = 0.0;
+    for weight in strong_three_weights.chain(run_weights) {
         best_eval += (100.0 - best_eval) * weight / 100.0;
     }
 
     best_eval.min(99.0)
+}
+
+/// A three-stone pattern that can become the open four `.XXXX.` in one move.
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ThreeWithOpenFourPotential {
+    direction: ge::Direction,
+    stones: [ge::Position; 3],
+    moves_to_open_four: [Option<ge::Position>; 2],
+}
+
+/// Finds threes that can become open fours in one move, using `runs` from
+/// [`find_stone_runs`] to locate the first stone of each candidate window.
+///
+/// A valid window is six cells long. Both ends must be empty, and the four
+/// inner cells must contain exactly three stones of `player` and one empty
+/// development cell.
+fn find_threes_with_open_four_potential(
+    board: &ge::Board,
+    player: ge::Player,
+    runs: &[StoneRun],
+) -> Vec<ThreeWithOpenFourPotential> {
+    let cells = board.cells();
+    let own_stone = ge::Cell::Taken(player);
+    let mut strong_threes = Vec::new();
+    for run in runs {
+        let [Some(before), Some(after)] = run.open_ends else {
+            continue;
+        };
+        let (second_step, third_step) = match run.length {
+            1 => (2, 3), // .X.XX.
+            2 => (1, 3), // .XX.X.
+            3 => (1, 2), // .XXX.. or ..XXX.
+            _ => continue,
+        };
+
+        let Some(second) = offset_position(run.start, run.direction, second_step) else {
+            continue;
+        };
+        let Some(third) = offset_position(run.start, run.direction, third_step) else {
+            continue;
+        };
+        if !(cells[second.0][second.1] == own_stone && cells[third.0][third.1] == own_stone) {
+            continue;
+        }
+
+        let mut moves_to_open_four = [None; 2];
+        if let Some((row, col)) = offset_position(run.start, run.direction, 4)
+            && cells[row][col] == ge::Cell::Empty
+        {
+            moves_to_open_four[0] = Some(after);
+        }
+        if run.length == 3
+            && let Some((row, col)) = offset_position(run.start, run.direction, -2)
+            && cells[row][col] == ge::Cell::Empty
+        {
+            moves_to_open_four[1] = Some(before);
+        }
+        if moves_to_open_four == [None; 2] {
+            continue;
+        }
+
+        strong_threes.push(ThreeWithOpenFourPotential {
+            direction: run.direction,
+            stones: [run.start, second, third],
+            moves_to_open_four,
+        });
+    }
+    strong_threes
+}
+
+fn run_is_part_of_strong_three(
+    run: &StoneRun,
+    strong_threes: &[ThreeWithOpenFourPotential],
+) -> bool {
+    match run.length {
+        1 => strong_threes
+            .iter()
+            .any(|three| three.direction == run.direction && three.stones.contains(&run.start)),
+        2 => {
+            let second = offset_position(run.start, run.direction, 1)
+                .expect("a run of length 2 has a second stone on the board");
+            strong_threes.iter().any(|three| {
+                three.direction == run.direction
+                    && three
+                        .stones
+                        .windows(2)
+                        .any(|pair| pair[0] == run.start && pair[1] == second)
+            })
+        }
+        3 => {
+            let second = offset_position(run.start, run.direction, 1)
+                .expect("a run of length 3 has a second stone on the board");
+            let third = offset_position(run.start, run.direction, 2)
+                .expect("a run of length 3 has a third stone on the board");
+            strong_threes.iter().any(|three| {
+                three.direction == run.direction && three.stones == [run.start, second, third]
+            })
+        }
+        _ => false,
+    }
+}
+
+/// Adds `steps` cells in `direction` with checked arithmetic and board bounds.
+fn offset_position(
+    start: ge::Position,
+    direction: ge::Direction,
+    steps: isize,
+) -> Option<ge::Position> {
+    let row = start
+        .0
+        .checked_add_signed(direction.0.checked_mul(steps)?)?;
+    let column = start
+        .1
+        .checked_add_signed(direction.1.checked_mul(steps)?)?;
+    (row < ge::BOARD_SIZE && column < ge::BOARD_SIZE).then_some((row, column))
 }
 
 #[derive(Debug)]

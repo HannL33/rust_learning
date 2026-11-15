@@ -1007,6 +1007,43 @@ fn evaluation_scores_open_pairs_but_ignores_single_stones() {
 }
 
 #[test]
+fn singleton_run_can_belong_to_a_strong_three_in_its_axis() {
+    let mut board = ge::Board::new();
+    let player = ge::Player::X;
+    for col in [3, 5, 6] {
+        place(&mut board, (7, col), player);
+    }
+
+    let runs = find_stone_runs(&board, player);
+    let strong_threes = find_threes_with_open_four_potential(&board, player, &runs);
+    let horizontal = runs
+        .iter()
+        .find(|run| run.start == (7, 3) && run.direction == (0, 1))
+        .unwrap();
+    assert_eq!(horizontal.length, 1);
+    assert!(run_is_part_of_strong_three(horizontal, &strong_threes));
+
+    let vertical = runs
+        .iter()
+        .find(|run| run.start == (7, 3) && run.direction == (1, 0))
+        .unwrap();
+    assert!(!run_is_part_of_strong_three(vertical, &strong_threes));
+}
+
+#[test]
+fn evaluation_scores_only_the_open_pair_when_two_gaps_separate_three_stones() {
+    let mut board = ge::Board::new();
+    let player = ge::Player::X;
+    for col in [3, 6, 7] {
+        place(&mut board, (7, col), player);
+    }
+
+    let runs = find_stone_runs(&board, player);
+    assert!(find_threes_with_open_four_potential(&board, player, &runs).is_empty());
+    assert_eq!(evaluate(&board, player), 5.0);
+}
+
+#[test]
 fn evaluation_matches_current_weights_for_each_direction_and_player() {
     for player in PLAYERS {
         for direction in DIRECTIONS {
