@@ -1,7 +1,6 @@
 use crate::gomoku_engine as ge;
 
 pub fn evaluate(board: &ge::Board, player: ge::Player) -> f32 {
-    // simple heuristics for evaluating the position of the game of gomoku
     match board.check_result() {
         ge::GameResult::Draw => 0.0,
         ge::GameResult::Win(winner) => {
@@ -21,7 +20,6 @@ pub(crate) fn evaluate_in_progress(board: &ge::Board, player: ge::Player) -> f32
 }
 
 fn pattern_score(board: &ge::Board, player: ge::Player) -> f32 {
-    let mut best_eval: f32 = 0.0;
     let stone_runs = find_stone_runs(board, player);
     let strong_threes = find_threes_with_open_four_potential(board, player, &stone_runs);
 
@@ -48,7 +46,6 @@ fn pattern_score(board: &ge::Board, player: ge::Player) -> f32 {
     for weight in strong_three_weights.chain(run_weights) {
         best_eval += (100.0 - best_eval) * weight / 100.0;
     }
-
     best_eval.min(99.0)
 }
 
