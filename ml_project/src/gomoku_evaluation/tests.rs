@@ -1314,6 +1314,271 @@ fn evaluation_counts_an_open_pair_but_ignores_single_stones_and_dead_fours() {
     assert_eq!(evaluate(&board, ge::Player::X), 5.0);
 }
 
+fn window_origin(direction: Direction) -> Position {
+    match direction {
+        (0, 1) => (7, 3),
+        (1, 0) => (3, 7),
+        (1, 1) => (3, 3),
+        (1, -1) => (3, 12),
+        _ => unreachable!("unexpected direction"),
+    }
+}
+
+fn place_window_stones(
+    board: &mut ge::Board,
+    player: ge::Player,
+    start: Position,
+    direction: Direction,
+    steps: &[isize],
+) -> Vec<Position> {
+    steps
+        .iter()
+        .map(|&step| {
+            let position = offset(start, direction, step).expect("fixture must stay in bounds");
+            place(board, position, player);
+            position
+        })
+        .collect()
+}
+
+fn sorted_moves_to_open_four(mut moves: [Option<Position>; 2]) -> [Option<Position>; 2] {
+    moves.sort_unstable();
+    moves
+}
+
+fn strong_three_snapshots(
+    board: &ge::Board,
+    player: ge::Player,
+) -> Vec<(Direction, [Position; 3], [Option<Position>; 2])> {
+    let runs = find_stone_runs(board, player);
+    let mut threats: Vec<_> = find_threes_with_open_four_potential(board, player, &runs)
+        .into_iter()
+        .map(|threat| {
+            (
+                threat.direction,
+                threat.stones,
+                sorted_moves_to_open_four(threat.moves_to_open_four),
+            )
+        })
+        .collect();
+    threats.sort_unstable();
+    threats
+}
+
+fn assert_single_strong_three(
+    player: ge::Player,
+    direction: Direction,
+    stones_steps: &[isize],
+    open_steps: &[isize],
+    blocker_step: Option<isize>,
+) {
+    let start = window_origin(direction);
+    let mut board = ge::Board::new();
+    if let Some(step) = blocker_step {
+        place(
+            &mut board,
+            offset(start, direction, step).unwrap(),
+            player.opposite(),
+        );
+    }
+    let stones = place_window_stones(&mut board, player, start, direction, stones_steps);
+    let expected_stones = [stones[0], stones[1], stones[2]];
+    let mut open_moves = open_steps
+        .iter()
+        .map(|&step| Some(offset(start, direction, step).unwrap()))
+        .collect::<Vec<_>>();
+    open_moves.resize(2, None);
+    open_moves.sort_unstable();
+    let expected_open = [open_moves[0], open_moves[1]];
+    let before = *board.cells();
+    assert_eq!(
+        strong_three_snapshots(&board, player),
+        vec![(direction, expected_stones, expected_open)],
+        "player={player:?}, direction={direction:?}, steps={stones_steps:?}, blockers={blocker_step:?}",
+    );
+    assert!(strong_three_snapshots(&board, player.opposite()).is_empty());
+    assert_eq!(*board.cells(), before);
+}
+
+#[test]
+fn strong_three_detector_recognizes_contiguous_and_gapped_patterns_in_every_axis() {
+    for player in PLAYERS {
+        for direction in DIRECTIONS {
+            // .XXX..
+            assert_single_strong_three(player, direction, &[1, 2, 3], &[4], Some(-1));
+            // ..XXX.
+            assert_single_strong_three(player, direction, &[2, 3, 4], &[1], Some(6));
+            // .XX.X.
+            assert_single_strong_three(player, direction, &[1, 2, 4], &[3], None);
+            // .X.XX.
+            assert_single_strong_three(player, direction, &[1, 3, 4], &[2], None);
+            // ..XXX.. has two development moves and is still one threat.
+            assert_single_strong_three(player, direction, &[2, 3, 4], &[1, 5], None);
+        }
+    }
+}
+
+#[test]
+fn strong_three_detector_rejects_opponents_inside_the_window() {
+    for player in PLAYERS {
+        for direction in DIRECTIONS {
+            let start = window_origin(direction);
+            let mut board = ge::Board::new();
+            place_window_stones(&mut board, player, start, direction, &[1, 2, 4]);
+            place(
+                &mut board,
+                offset(start, direction, 3).unwrap(),
+                player.opposite(),
+            );
+            assert!(
+                strong_three_snapshots(&board, player).is_empty(),
+                "player={player:?}, direction={direction:?}",
+            );
+        }
+    }
+}
+
+#[test]
+fn strong_three_detector_rejects_occupied_window_ends() {
+    for player in PLAYERS {
+        for direction in DIRECTIONS {
+            for steps in [&[1, 2, 4][..], &[1, 3, 4][..]] {
+                for blocked_end in [0, 5] {
+                    let start = window_origin(direction);
+                    let mut board = ge::Board::new();
+                    place_window_stones(&mut board, player, start, direction, steps);
+                    place(
+                        &mut board,
+                        offset(start, direction, blocked_end).unwrap(),
+                        player.opposite(),
+                    );
+                    assert!(
+                        strong_three_snapshots(&board, player).is_empty(),
+                        "player={player:?}, direction={direction:?}, steps={steps:?}, end={blocked_end}",
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn strong_three_detector_accepts_an_empty_window_end_on_the_board_edge() {
+    for player in PLAYERS {
+        for (start, direction) in [
+            ((0, 0), (0, 1)),
+            ((0, 0), (1, 0)),
+            ((0, 0), (1, 1)),
+            ((0, 5), (1, -1)),
+        ] {
+            let mut board = ge::Board::new();
+            if let Some(blocker) = offset(start, direction, 6) {
+                place(&mut board, blocker, player.opposite());
+            }
+            let stones = place_window_stones(&mut board, player, start, direction, &[2, 3, 4]);
+            let development = offset(start, direction, 1).unwrap();
+            assert_eq!(
+                strong_three_snapshots(&board, player),
+                vec![(
+                    direction,
+                    [stones[0], stones[1], stones[2]],
+                    [None, Some(development)],
+                )],
+                "player={player:?}, start={start:?}, direction={direction:?}",
+            );
+        }
+    }
+}
+
+#[test]
+fn strong_three_detector_accepts_a_window_ending_on_the_board_edge() {
+    for player in PLAYERS {
+        let mut board = ge::Board::new();
+        let stones = place_window_stones(&mut board, player, (9, 9), (1, 1), &[1, 2, 3]);
+        assert_eq!(
+            strong_three_snapshots(&board, player),
+            vec![(
+                (1, 1),
+                [stones[0], stones[1], stones[2]],
+                [Some((9, 9)), Some((13, 13))],
+            )],
+            "player={player:?}",
+        );
+    }
+}
+
+#[test]
+fn strong_three_detector_ignores_diagonals_too_short_for_a_six_cell_window() {
+    for player in PLAYERS {
+        let mut board = ge::Board::new();
+        // Top-right corner: only three cells exist on this diagonal.
+        place_window_stones(&mut board, player, (0, 2), (1, -1), &[0, 1, 2]);
+        assert!(strong_three_snapshots(&board, player).is_empty());
+
+        let mut board = ge::Board::new();
+        // Five-cell diagonal with both ends open, but no room for six cells.
+        place_window_stones(&mut board, player, (0, 4), (1, -1), &[1, 2, 3]);
+        assert!(strong_three_snapshots(&board, player).is_empty());
+    }
+}
+
+#[test]
+fn evaluation_scores_the_stage_two_pattern_table_exactly() {
+    let mut board = ge::Board::new();
+    place_window_stones(&mut board, ge::Player::X, (7, 2), (0, 1), &[2, 3, 4]);
+    assert_eq!(evaluate(&board, ge::Player::X), 50.0);
+
+    let mut board = ge::Board::new();
+    place_window_stones(&mut board, ge::Player::X, (7, 2), (0, 1), &[1, 2, 4]);
+    assert_eq!(evaluate(&board, ge::Player::X), 50.0);
+
+    let mut board = ge::Board::new();
+    place_window_stones(&mut board, ge::Player::X, (7, 2), (0, 1), &[1, 3, 4, 6]);
+    assert_eq!(evaluate(&board, ge::Player::X), 75.0);
+
+    let mut board = ge::Board::new();
+    place_window_stones(&mut board, ge::Player::X, (7, 2), (0, 1), &[2, 3, 4]);
+    place(&mut board, (7, 2), ge::Player::O);
+    place(&mut board, (7, 8), ge::Player::O);
+    assert_eq!(evaluate(&board, ge::Player::X), 30.0);
+}
+
+#[test]
+fn evaluation_counts_two_strong_threes_in_different_axes() {
+    let mut board = ge::Board::new();
+    place_window_stones(&mut board, ge::Player::X, (7, 2), (0, 1), &[1, 2, 4]);
+    place_window_stones(&mut board, ge::Player::X, (2, 10), (1, 0), &[1, 2, 4]);
+    assert_eq!(board.check_result(), ge::GameResult::InProgress);
+    assert_eq!(evaluate(&board, ge::Player::X), 75.0);
+}
+
+#[test]
+fn evaluation_keeps_an_independent_pair_after_a_strong_three() {
+    let mut board = ge::Board::new();
+    place_window_stones(&mut board, ge::Player::X, (7, 2), (0, 1), &[1, 2, 4]);
+    place_window_stones(&mut board, ge::Player::X, (2, 2), (0, 1), &[0, 1]);
+    assert_eq!(evaluate(&board, ge::Player::X), 52.5);
+}
+
+#[test]
+fn evaluation_gives_zero_to_a_fully_blocked_three() {
+    let mut board = ge::Board::new();
+    place_window_stones(&mut board, ge::Player::X, (7, 2), (0, 1), &[1, 2, 3]);
+    place(&mut board, (7, 2), ge::Player::O);
+    place(&mut board, (7, 6), ge::Player::O);
+    assert_eq!(evaluate(&board, ge::Player::X), 0.0);
+}
+
+#[test]
+fn evaluation_sign_and_board_state_are_unchanged_by_three_threats() {
+    let mut board = ge::Board::new();
+    place_window_stones(&mut board, ge::Player::O, (7, 2), (0, 1), &[1, 2, 4]);
+    let before = *board.cells();
+    assert_eq!(evaluate(&board, ge::Player::O), 50.0);
+    assert_eq!(evaluate(&board, ge::Player::X), -50.0);
+    assert_eq!(*board.cells(), before);
+}
+
 #[test]
 fn full_width_run_has_two_closed_ends() {
     for player in PLAYERS {
