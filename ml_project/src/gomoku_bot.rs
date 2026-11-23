@@ -448,23 +448,55 @@ enum ForcingResult {
     Unknown,
 }
 
-/**
-We only find moves, that are threats for the opponent
-We do not know if the threat lead to the win
-*/
+/// Finds moves that create a win-in-one after one move.
+/// So basically we ask `where i can put my stone, such that if opponent will not block me
+/// i can win in one move
 fn forcing_moves(board: &ge::Board, player: ge::Player) -> Vec<ge::Position> {
-    let mut res_vec: Vec<ge::Position> = Vec::new();
-    let available_close_moves = board.available_empty_moves_close(CLOSE_RANGE_PARAM);
-    for av_move in available_close_moves {
-        let next_board = board
-            .apply_move(av_move, player)
-            .expect("Expected the possible move to play in forcing moves.");
-        if !next_board.win_in_one(player).is_empty() {
-            res_vec.push(av_move);
+    let own = ge::Cell::Taken(player);
+    let cells = board.cells();
+    let mut creates_threat = [[false; ge::BOARD_SIZE]; ge::BOARD_SIZE];
+
+    for row in 0..ge::BOARD_SIZE {
+        for col in 0..ge::BOARD_SIZE {
+            for direction in AXES {
+                let mut own_stones = 0;
+                let mut empty_count = 0;
+                let mut empty_squares = [(0, 0); 2];
+
+                for step in 0..5 {
+                    let Some((window_row, window_col)) =
+                        offset_position((row, col), direction, step)
+                    else {
+                        break;
+                    };
+                    match cells[window_row][window_col] {
+                        cell if cell == own => own_stones += 1,
+                        ge::Cell::Empty if empty_count < empty_squares.len() => {
+                            empty_squares[empty_count] = (window_row, window_col);
+                            empty_count += 1;
+                        }
+                        _ => break,
+                    }
+                }
+
+                if own_stones == 3 && empty_count == 2 {
+                    for (empty_row, empty_col) in empty_squares {
+                        creates_threat[empty_row][empty_col] = true;
+                    }
+                }
+            }
         }
     }
 
-    res_vec
+    let mut moves = Vec::new();
+    for (row, row_threats) in creates_threat.iter().enumerate() {
+        for (col, &is_threat) in row_threats.iter().enumerate() {
+            if is_threat {
+                moves.push((row, col));
+            }
+        }
+    }
+    moves
 }
 
 fn search_forcing_line(
