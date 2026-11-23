@@ -151,7 +151,7 @@ fn run_is_part_of_strong_three(
 }
 
 /// Adds `steps` cells in `direction` with checked arithmetic and board bounds.
-fn offset_position(
+pub(crate) fn offset_position(
     start: ge::Position,
     direction: ge::Direction,
     steps: isize,

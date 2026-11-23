@@ -1,4 +1,7 @@
-use crate::{gomoku_engine as ge, gomoku_evaluation::evaluate};
+use crate::{
+    gomoku_engine as ge,
+    gomoku_evaluation::{evaluate_in_progress, offset_position},
+};
 const CLOSE_RANGE_PARAM: usize = 2;
 const FORCING_BUDGET: usize = 8;
 const WIN_MAX_SCORE: f32 = 10_000.0;
@@ -26,86 +29,217 @@ enum ProvenGroup {
     Losses(Vec<ProvenCandidate>),
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum WinningReplies {
+    None,
+    One(ge::Position),
+    Multiple,
+}
+
+impl WinningReplies {
+    fn from_moves(moves: &[ge::Position]) -> Self {
+        match moves {
+            [] => Self::None,
+            [position] => Self::One(*position),
+            _ => Self::Multiple,
+        }
+    }
+}
+
+const AXES: [ge::Direction; 4] = [(0, 1), (1, 0), (1, 1), (1, -1)];
+
+struct SideScan {
+    /// Consecutive own stones next to the anchor.
+    stones_before_gap: usize,
+    /// The first empty square reached by the scan.
+    first_gap: Option<ge::Position>,
+    /// Consecutive own stones immediately after the gap.
+    stones_after_gap: usize,
+}
+
+/// Counts stones beside the anchor and beyond the first gap on one side.
+fn scan_side(
+    board: &ge::Board,
+    position: ge::Position,
+    direction: ge::Direction,
+    own: ge::Cell,
+) -> SideScan {
+    let mut stones_before_gap = 0;
+    let mut first_gap = None;
+    let mut stones_after_gap = 0;
+    for distance in 1..=4 {
+        let Some((row, col)) = offset_position(position, direction, distance) else {
+            break;
+        };
+        match board.cells()[row][col] {
+            cell if cell == own => {
+                // here we do not match the specific expression, just irrefutable, only binding the board.cells()[row][col] to the cell variable and then checking the guard, so we pick everything, bind it into `cell` and check condition, if so then go to the body of this case
+                if first_gap.is_some() {
+                    stones_after_gap += 1;
+                } else {
+                    stones_before_gap += 1;
+                }
+            }
+            ge::Cell::Empty if first_gap.is_none() => first_gap = Some((row, col)),
+            _ => break,
+        }
+    }
+    SideScan {
+        stones_before_gap,
+        first_gap,
+        stones_after_gap,
+    }
+}
+
+/// Finds up to two winning squares on lines through the stone just played.
+/// At a quiet or mandatory-block node these are all newly created threats.
+fn winning_replies_through(
+    board: &ge::Board,
+    last_move: ge::Position,
+    player: ge::Player,
+) -> WinningReplies {
+    let own = ge::Cell::Taken(player);
+    let mut replies = WinningReplies::None;
+    for (row_step, col_step) in AXES {
+        let backward = scan_side(board, last_move, (-row_step, -col_step), own);
+        let forward = scan_side(board, last_move, (row_step, col_step), own);
+        let connected_stones = 1 + backward.stones_before_gap + forward.stones_before_gap;
+
+        for side in [backward, forward] {
+            let Some(gap_position) = side.first_gap else {
+                continue;
+            };
+            let line_length_after_move = connected_stones + 1 + side.stones_after_gap;
+            if line_length_after_move < 5 {
+                continue;
+            }
+
+            if replies != WinningReplies::None {
+                return WinningReplies::Multiple;
+            }
+            replies = WinningReplies::One(gap_position);
+        }
+    }
+    replies
+}
+
+fn mate(bot: ge::Player, winner: ge::Player, ply: usize) -> f32 {
+    let score = WIN_MAX_SCORE - ply as f32;
+    if bot == winner { score } else { -score }
+}
+
+/// Evaluates a fixed-depth subtree from the bot's perspective.
+/// Checks the starting board before using local threat updates in recursion.
 pub fn minimax_alpha_beta(
     board: ge::Board,
     is_maximizing: bool,
     bot: ge::Player,
     depth: usize,
-    mut alpha: f32,
-    mut beta: f32,
+    alpha: f32,
+    beta: f32,
     ply: usize,
 ) -> f32 {
     match board.check_result() {
-        ge::GameResult::Win(_player) => {
-            if _player == bot {
-                return WIN_MAX_SCORE - ply as f32;
-            } else {
-                return -WIN_MAX_SCORE + ply as f32;
-            }
+        ge::GameResult::Win(winner) => return mate(bot, winner, ply),
+        ge::GameResult::Draw => return 0.0,
+        ge::GameResult::InProgress => {}
+    }
+
+    let player = if is_maximizing { bot } else { bot.opposite() };
+    if !board.win_in_one(player).is_empty() {
+        return mate(bot, player, ply + 1);
+    }
+
+    let replies = WinningReplies::from_moves(&board.win_in_one(player.opposite()));
+    let empty = board
+        .cells()
+        .iter()
+        .flatten()
+        .filter(|&&cell| cell == ge::Cell::Empty)
+        .count();
+    let node = MinimaxNode {
+        board: &board,
+        player,
+        depth,
+        ply,
+        empty,
+        replies,
+    };
+    minimax(node, bot, (alpha, beta))
+}
+
+struct MinimaxNode<'a> {
+    board: &'a ge::Board,
+    player: ge::Player,
+    depth: usize,
+    ply: usize,
+    empty: usize,
+    replies: WinningReplies,
+}
+
+/// Searches a node where the side to move has no immediate win.
+fn minimax(node: MinimaxNode<'_>, bot: ge::Player, (mut alpha, mut beta): (f32, f32)) -> f32 {
+    let MinimaxNode {
+        board,
+        player,
+        depth,
+        ply,
+        empty,
+        replies,
+    } = node;
+    if empty == 0 {
+        return 0.0;
+    }
+    if replies == WinningReplies::Multiple {
+        return mate(bot, player.opposite(), ply + 2);
+    }
+    let mut moves = match replies {
+        WinningReplies::One(square) => vec![square],
+        WinningReplies::None if depth > 0 => board.available_empty_moves_close(CLOSE_RANGE_PARAM),
+        _ => Vec::new(),
+    };
+    if moves.is_empty() {
+        return evaluate_in_progress(board, bot);
+    }
+    let center = board.size() / 2;
+    moves.sort_unstable_by_key(|&(row, col)| {
+        (row.abs_diff(center) + col.abs_diff(center), row, col)
+    });
+
+    let maximizing = player == bot;
+    let mut best = if maximizing {
+        f32::NEG_INFINITY
+    } else {
+        f32::INFINITY
+    };
+    for position in moves {
+        let next = board
+            .apply_move(position, player)
+            .expect("search move must be legal");
+
+        let next_replies = winning_replies_through(&next, position, player);
+        let child = MinimaxNode {
+            board: &next,
+            player: player.opposite(),
+            depth: depth.saturating_sub(1),
+            ply: ply + 1,
+            empty: empty - 1,
+            replies: next_replies,
+        };
+        let score = minimax(child, bot, (alpha, beta));
+        if (maximizing && score > best) || (!maximizing && score < best) {
+            best = score;
         }
-        ge::GameResult::Draw => return 0_f32,
-        ge::GameResult::InProgress => {
-            let player = if is_maximizing { bot } else { bot.opposite() };
-
-            if !board.win_in_one(player).is_empty() {
-                if player == bot {
-                    return WIN_MAX_SCORE - (ply + 1) as f32;
-                } else {
-                    return -WIN_MAX_SCORE + (ply + 1) as f32;
-                }
-            }
-            let mut best = if is_maximizing { f32::MIN } else { f32::MAX };
-            let opponent_wins = board.win_in_one(player.opposite());
-            let mut moves = match opponent_wins.len() {
-                0 => {
-                    if depth == 0 {
-                        return evaluate(&board, bot);
-                    }
-                    board.available_empty_moves_close(CLOSE_RANGE_PARAM)
-                }
-                1 => opponent_wins,
-                _ => {
-                    if player == bot {
-                        return -WIN_MAX_SCORE + (ply + 2) as f32;
-                    } else {
-                        return WIN_MAX_SCORE - (ply + 2) as f32;
-                    }
-                }
-            };
-
-            let center = board.size() / 2;
-            moves.sort_by_key(|(row, col)| row.abs_diff(center) + col.abs_diff(center));
-            if moves.is_empty() {
-                return evaluate(&board, bot);
-            }
-
-            for coor in moves {
-                let new_board = board
-                    .apply_move(coor, player)
-                    .expect("Expect the best right now!");
-                let score = minimax_alpha_beta(
-                    new_board,
-                    !is_maximizing,
-                    bot,
-                    depth.saturating_sub(1),
-                    alpha,
-                    beta,
-                    ply + 1,
-                );
-                if is_maximizing {
-                    best = best.max(score);
-                    alpha = alpha.max(best);
-                } else {
-                    best = best.min(score);
-                    beta = beta.min(best);
-                };
-                if alpha >= beta {
-                    break;
-                }
-            }
-            best
+        if maximizing {
+            alpha = alpha.max(best);
+        } else {
+            beta = beta.min(best);
+        }
+        if alpha >= beta {
+            break;
         }
     }
+    best
 }
 
 pub fn best_move_alpha_beta(
