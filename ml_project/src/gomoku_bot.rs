@@ -250,7 +250,14 @@ fn order_moves(
 ) {
     let center = board.size() / 2;
     let threats = prioritize_threats.then(|| forcing_squares(board, player));
-    moves.sort_unstable_by_key(|&(row, col)| z);
+    moves.sort_unstable_by_key(|&(row, col)| {
+        (
+            !threats.as_ref().is_some_and(|squares| squares[row][col]),
+            row.abs_diff(center) + col.abs_diff(center),
+            row,
+            col,
+        )
+    });
 }
 
 pub fn best_move_alpha_beta(
