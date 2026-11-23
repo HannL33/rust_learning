@@ -5,6 +5,7 @@ use crate::{
 const CLOSE_RANGE_PARAM: usize = 2;
 const FORCING_BUDGET: usize = 8;
 const WIN_MAX_SCORE: f32 = 10_000.0;
+const WIN_IN_FIVE_SCORE: f32 = WIN_MAX_SCORE - 5.0;
 const MIN_MATE_SCORE: f32 = WIN_MAX_SCORE - (ge::BOARD_SIZE * ge::BOARD_SIZE) as f32;
 
 struct ProvenCandidate {
@@ -201,10 +202,9 @@ fn minimax(node: MinimaxNode<'_>, bot: ge::Player, (mut alpha, mut beta): (f32, 
     if moves.is_empty() {
         return evaluate_in_progress(board, bot);
     }
-    let center = board.size() / 2;
-    moves.sort_unstable_by_key(|&(row, col)| {
-        (row.abs_diff(center) + col.abs_diff(center), row, col)
-    });
+    if moves.len() > 1 {
+        order_moves(&mut moves, board, player, depth >= 2);
+    }
 
     let maximizing = player == bot;
     let mut best = if maximizing {
@@ -242,6 +242,17 @@ fn minimax(node: MinimaxNode<'_>, bot: ge::Player, (mut alpha, mut beta): (f32, 
     best
 }
 
+fn order_moves(
+    moves: &mut [ge::Position],
+    board: &ge::Board,
+    player: ge::Player,
+    prioritize_threats: bool,
+) {
+    let center = board.size() / 2;
+    let threats = prioritize_threats.then(|| forcing_squares(board, player));
+    moves.sort_unstable_by_key(|&(row, col)| z);
+}
+
 pub fn best_move_alpha_beta(
     board: ge::Board,
     player: ge::Player,
@@ -269,11 +280,23 @@ pub fn best_move_alpha_beta(
         .flatten()
         .all(|cell| *cell == ge::Cell::Empty)
     {
-        return Some((board.size() / 2, board.size() / 2));
+        return Some((center, center));
     }
     let mut moves = board.available_empty_moves_close(CLOSE_RANGE_PARAM);
 
-    moves.sort_by_key(|&(row, col)| row.abs_diff(center) + col.abs_diff(center));
+    order_moves(&mut moves, &board, player, depth >= 2);
+
+    if opponent_wins.is_empty() {
+        for &position in &moves {
+            let next = board
+                .apply_move(position, player)
+                .expect("root move must be legal");
+            if winning_replies_through(&next, position, player) == WinningReplies::Multiple {
+                println!("Confirmed win; distance in searched tree: 3 half-moves");
+                return Some(position);
+            }
+        }
+    }
 
     let mut candidates = Vec::with_capacity(moves.len());
     // Only ordinary minimax results contribute to this window. Forcing proofs
@@ -306,6 +329,10 @@ pub fn best_move_alpha_beta(
             let candidate = if score >= MIN_MATE_SCORE && score > alpha {
                 // With beta = infinity, improving alpha gives an exact search
                 // result. A fail-low positive bound alone cannot prove a win.
+                if score == WIN_IN_FIVE_SCORE {
+                    println!("Confirmed win; distance in searched tree: 5 half-moves");
+                    return Some(position);
+                }
                 RootCandidate::ProvenWin(ProvenCandidate {
                     position,
                     plies: (WIN_MAX_SCORE - score) as usize,
@@ -407,9 +434,8 @@ fn best_proven_move(
             if best_exact.is_none_or(|(_, old)| score > old) {
                 best_exact = Some((index, score));
             }
-            // Immediate root wins were handled earlier. Three half-moves is
-            // therefore the shortest remaining win, regardless of other lines.
-            if winning && score == WIN_MAX_SCORE - 3.0 {
+            // Root checks have already ruled out wins in one or three half-moves.
+            if winning && score == WIN_IN_FIVE_SCORE {
                 break;
             }
         } else {
@@ -421,7 +447,7 @@ fn best_proven_move(
     // Prefer the longest resolved defence whenever one was found.
     let (chosen_index, distance_resolved) = match best_exact {
         Some((index, score))
-            if !winning || !has_unresolved_distance || score == WIN_MAX_SCORE - 3.0 =>
+            if !winning || !has_unresolved_distance || score == WIN_IN_FIVE_SCORE =>
         {
             (index, true)
         }
@@ -452,6 +478,22 @@ enum ForcingResult {
 /// So basically we ask `where i can put my stone, such that if opponent will not block me
 /// i can win in one move
 fn forcing_moves(board: &ge::Board, player: ge::Player) -> Vec<ge::Position> {
+    let threats = forcing_squares(board, player);
+    let mut moves = Vec::new();
+    for (row, row_threats) in threats.iter().enumerate() {
+        for (col, &is_threat) in row_threats.iter().enumerate() {
+            if is_threat {
+                moves.push((row, col));
+            }
+        }
+    }
+    moves
+}
+
+fn forcing_squares(
+    board: &ge::Board,
+    player: ge::Player,
+) -> [[bool; ge::BOARD_SIZE]; ge::BOARD_SIZE] {
     let own = ge::Cell::Taken(player);
     let cells = board.cells();
     let mut creates_threat = [[false; ge::BOARD_SIZE]; ge::BOARD_SIZE];
@@ -488,15 +530,7 @@ fn forcing_moves(board: &ge::Board, player: ge::Player) -> Vec<ge::Position> {
         }
     }
 
-    let mut moves = Vec::new();
-    for (row, row_threats) in creates_threat.iter().enumerate() {
-        for (col, &is_threat) in row_threats.iter().enumerate() {
-            if is_threat {
-                moves.push((row, col));
-            }
-        }
-    }
-    moves
+    creates_threat
 }
 
 fn search_forcing_line(
